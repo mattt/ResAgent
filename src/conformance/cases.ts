@@ -101,10 +101,13 @@ export const cases: Case[] = [
     name: "alarm set/get/delete",
     description:
       "alarm state stores a scheduled time and can be read and cleared (delete is void)",
+    // Constraints the workerd oracle enforces: the class must define an alarm() handler, and the
+    // time must be before ~2189 and in the future (a past time fires immediately). 2100-01-01 is a
+    // safe fixed future time that never fires during a test.
     steps: [
       { op: { kind: "getAlarm" }, expect: null },
-      { op: { kind: "setAlarm", scheduledTime: 5000 }, expect: null },
-      { op: { kind: "getAlarm" }, expect: 5000 },
+      { op: { kind: "setAlarm", scheduledTime: 4102444800000 }, expect: null },
+      { op: { kind: "getAlarm" }, expect: 4102444800000 },
       { op: { kind: "deleteAlarm" }, expect: null },
       { op: { kind: "getAlarm" }, expect: null },
     ],

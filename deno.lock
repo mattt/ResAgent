@@ -8,7 +8,8 @@
     "npm:@cdktf/hcl2json@0.21": "0.21.0",
     "npm:@cloudflare/workers-types@*": "5.20260804.1",
     "npm:@huggingface/hub@^2.14.0": "2.14.6",
-    "npm:@huggingface/transformers@3": "3.8.1"
+    "npm:@huggingface/transformers@3": "3.8.1",
+    "npm:workerd@1.20260804.1": "1.20260804.1"
   },
   "jsr": {
     "@std/assert@1.0.19": {
@@ -36,6 +37,31 @@
       "dependencies": [
         "fs-extra"
       ]
+    },
+    "@cloudflare/workerd-darwin-64@1.20260804.1": {
+      "integrity": "sha512-191/PPEFicRK2wK69eXzSjnLgHL79k7zR2VUpyIr8rhFgGns1b5bTHgnBuUrgU2LPbEtwbE5eL2hJ0uhLAFEow==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@cloudflare/workerd-darwin-arm64@1.20260804.1": {
+      "integrity": "sha512-aI2cAFLsrNkSz3kLSQrgrO9ICTfY7jb2h0jgaWDE9mQLQQDfpXeYrKWt07tTgMmeNP79o9w3NZe3aqtt8mTGHQ==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@cloudflare/workerd-linux-64@1.20260804.1": {
+      "integrity": "sha512-KBCjxBIlN2jucfQGaTK4EgmPsWzQgYR/zYhPfi3mkWwdoTyG1dgrt2aizKps/SYse85ci/SOxojKk0/K7vstPw==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@cloudflare/workerd-linux-arm64@1.20260804.1": {
+      "integrity": "sha512-7lswfarBZ7xkHpTFrNb74ExwOltIalVaASc+GOYfCNtnwFxK/JZSVByfm/hnZEBtrHU7fMY2z7dYT64rwS0pHg==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@cloudflare/workerd-windows-64@1.20260804.1": {
+      "integrity": "sha512-GOgRWYtxISN5rAWfx3K7zubt3xEn0/ZPFrbcLL+GwT4ouCKyNoHqfT1cPNB6Nx7t8BHEjnuTG7gkHO4Wd5ORdg==",
+      "os": ["win32"],
+      "cpu": ["x64"]
     },
     "@cloudflare/workers-types@5.20260804.1": {
       "integrity": "sha512-B1dwxpN6e5RZXZkE5zpZj+ooNeNZ1mwavLIyHDYe10ojhlGTwDfe8sAl7R1mMXc1cyIsbr+jKVdvmMEyVcdTdg=="
@@ -560,6 +586,18 @@
     "universalify@2.0.1": {
       "integrity": "sha512-gptHNQghINnc/vTGIk0SOFGFNXw7JVrlRUtConJRlvaw6DuX0wO5Jeko9sWrMBhh+PsYAZ7oXAiOnf/UKogyiw=="
     },
+    "workerd@1.20260804.1": {
+      "integrity": "sha512-b0P38g5/ssemwWxd/mafNYggEZ0ere7PCiUH6RCHkgqjRhhXTP45nDiL2L3iIvi8uF2IjNrGpVgMXEunCaeY/w==",
+      "optionalDependencies": [
+        "@cloudflare/workerd-darwin-64",
+        "@cloudflare/workerd-darwin-arm64",
+        "@cloudflare/workerd-linux-64",
+        "@cloudflare/workerd-linux-arm64",
+        "@cloudflare/workerd-windows-64"
+      ],
+      "scripts": true,
+      "bin": true
+    },
     "yallist@5.0.0": {
       "integrity": "sha512-YgvUTfwqyc7UXVMrB+SImsVYSmTS8X/tSrtdNZMImM+n7+QTriRXyXim0mBrTXNeqzVF0KWGgHPeiyViFFrNDw=="
     }
@@ -569,7 +607,8 @@
       "jsr:@std/toml@1",
       "npm:@cdktf/hcl2json@0.21",
       "npm:@huggingface/hub@^2.14.0",
-      "npm:@huggingface/transformers@3"
+      "npm:@huggingface/transformers@3",
+      "npm:workerd@1.20260804.1"
     ],
     "links": {
       "jsr:@deno-mlx/core@0.0.0": {},

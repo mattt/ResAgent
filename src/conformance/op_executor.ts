@@ -49,6 +49,9 @@ function toListOptions(options: ListOptions = {}): DurableObjectListOptions {
 export class OpExecutor implements DurableObject {
   constructor(private ctx: DurableObjectState) {}
 
+  /** Required: engines refuse setAlarm() unless the class defines an alarm() handler. */
+  alarm(): void {}
+
   async fetch(req: Request): Promise<Response> {
     const op = await req.json() as Op;
     const result = await applyOp(this.ctx.storage, op);

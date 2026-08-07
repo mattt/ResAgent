@@ -20,4 +20,6 @@ export interface Engine {
   readonly name: string;
   /** Stand up a fresh instance with empty, isolated storage. */
   create(): Promise<EngineInstance>;
+  /** Release engine-wide resources (e.g. a spawned workerd process). Optional. */
+  close?(): Promise<void> | void;
 }

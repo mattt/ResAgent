@@ -26,7 +26,13 @@ function engineByName(name: string): Engine {
 
 if (import.meta.main) {
   const engine = engineByName(Deno.args[0] ?? "reference");
-  const report = await runSuite(engine, cases);
-  console.log(formatReport(report));
-  Deno.exit(report.ok ? 0 : 1);
+  try {
+    const report = await runSuite(engine, cases);
+    console.log(formatReport(report));
+    await engine.close?.();
+    Deno.exit(report.ok ? 0 : 1);
+  } catch (e) {
+    await engine.close?.();
+    throw e;
+  }
 }
