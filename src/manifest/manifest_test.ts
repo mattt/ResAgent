@@ -10,6 +10,7 @@ import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/asse
 import { parse as parseToml } from "@std/toml";
 import { parseManifest } from "./parse.ts";
 import { toWrangler } from "./wrangler.ts";
+import { ManifestError, validateFile } from "./validate.ts";
 import type { Manifest } from "./types.ts";
 
 const exampleUrl = new URL("../../examples/research-agent/resagent.hcl", import.meta.url);
@@ -92,5 +93,89 @@ Deno.test("rejects an unknown namespace name", async () => {
 });
 
 Deno.test("parseManifest rejects malformed HCL", async () => {
-  await assertRejects(() => parseManifest("namespace {", "bad.hcl"));
+  await assertRejects(() => parseManifest("namespace {", { filename: "bad.hcl" }));
+});
+
+// ── strict schema validation (C4) ──────────────────────────────────────────
+
+Deno.test("the example manifest validates cleanly", async () => {
+  assertEquals(await validateFile(example), []);
+});
+
+Deno.test("rejects an unknown key with a precise path", async () => {
+  const issues = await validateFile(`
+    namespace "n" {
+      object "O" {
+        entrypoint = "o.ts"
+        colour     = "blue"
+      }
+    }
+  `);
+  assert(
+    issues.some((i) =>
+      i.path === "namespace.n.object.O.colour" && i.message.includes("unknown")
+    ),
+  );
+});
+
+Deno.test("rejects an unknown top-level block", async () => {
+  const issues = await validateFile(`widget "x" {}`);
+  assert(issues.some((i) => i.message.includes(`unknown key "widget"`)));
+});
+
+Deno.test("rejects a missing required entrypoint", async () => {
+  const issues = await validateFile(`
+    namespace "n" {
+      object "O" {
+        class = "O"
+      }
+    }
+  `);
+  assert(
+    issues.some((i) =>
+      i.path === "namespace.n.object.O.entrypoint" && i.message === "required"
+    ),
+  );
+});
+
+Deno.test("rejects an invalid folder mode and a non-string host list", async () => {
+  const issues = await validateFile(`
+    namespace "n" {
+      object "O" {
+        entrypoint = "o.ts"
+        bindings {
+          folder "F" {
+            grant = "~/x"
+            mode  = "sideways"
+          }
+        }
+      }
+    }
+    gate "n/O" {
+      allow "https" {
+        hosts = "not-a-list"
+      }
+    }
+  `);
+  assert(issues.some((i) => i.path.endsWith(".mode") && i.message.includes("one of")));
+  assert(
+    issues.some((i) =>
+      i.path.endsWith(".hosts") && i.message.includes("array of strings")
+    ),
+  );
+});
+
+Deno.test("parseManifest is strict by default and lenient on request", async () => {
+  const bad = `
+    namespace "n" {
+      object "O" {
+        entrypoint = "o.ts"
+        nope = true
+      }
+    }
+  `;
+  await assertRejects(() => parseManifest(bad), ManifestError, "schema error");
+  // strict:false still builds a model, ignoring the unknown key.
+  const m = await parseManifest(bad, { strict: false });
+  assertEquals(m.namespaces[0].objects[0].name, "O");
 });

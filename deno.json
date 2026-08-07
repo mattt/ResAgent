@@ -3,8 +3,9 @@
     "env-ai": "deno run --allow-ffi --allow-env --allow-read --allow-write --allow-net --unstable-ffi src/ai/main.ts",
     "pull": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys src/hub/pull.ts",
     "translate": "deno run --allow-read --allow-env src/manifest/translate.ts",
+    "validate": "deno run --allow-read --allow-env src/manifest/validate.ts",
     "test": "deno test --allow-read --allow-env src/",
-    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts examples/research-agent/index.ts",
+    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts examples/research-agent/index.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

@@ -7,6 +7,8 @@
  */
 
 import { parse as hclParse } from "@cdktf/hcl2json";
+import { bodies, type Json, obj, str, strArray } from "./hcl.ts";
+import { ManifestError, validateRaw } from "./validate.ts";
 import type {
   AiBinding,
   AllowRule,
@@ -18,32 +20,22 @@ import type {
   ServeRule,
 } from "./types.ts";
 
-type Json = Record<string, unknown>;
-
-function obj(v: unknown): Json | undefined {
-  return v && typeof v === "object" && !Array.isArray(v) ? v as Json : undefined;
-}
-
-/** hcl2json gives every block body as an array (repeated blocks allowed); normalize to a list. */
-function bodies(v: unknown): Json[] {
-  if (Array.isArray(v)) return v.map(obj).filter((x): x is Json => x !== undefined);
-  const o = obj(v);
-  return o ? [o] : [];
-}
-
-function str(v: unknown, dflt = ""): string {
-  return typeof v === "string" ? v : v == null ? dflt : String(v);
-}
-
-function strArray(v: unknown): string[] {
-  return Array.isArray(v) ? v.map((x) => str(x)) : [];
+export interface ParseOptions {
+  filename?: string;
+  /** Reject unknown/invalid keys against the manifest schema (default true). */
+  strict?: boolean;
 }
 
 export async function parseManifest(
   hclText: string,
-  filename = "resagent.hcl",
+  opts: ParseOptions = {},
 ): Promise<Manifest> {
+  const { filename = "resagent.hcl", strict = true } = opts;
   const root = (await hclParse(filename, hclText)) as Json;
+  if (strict) {
+    const issues = validateRaw(root);
+    if (issues.length > 0) throw new ManifestError(issues, filename);
+  }
   return {
     namespaces: parseNamespaces(root.namespace),
     gates: parseGates(root.gate),
