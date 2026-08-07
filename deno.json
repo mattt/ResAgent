@@ -1,8 +1,9 @@
 {
   "tasks": {
-    "env-ai": "deno run --allow-ffi --allow-env --allow-read --allow-write --allow-net --unstable-ffi src/ai/server.ts",
+    "env-ai": "deno run --allow-ffi --allow-env --allow-read --allow-write --allow-net --unstable-ffi src/ai/main.ts",
     "pull": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys src/hub/pull.ts",
-    "check": "deno check src/ai/server.ts src/hub/pull.ts examples/research-agent/index.ts",
+    "test": "deno test src/ai/server_test.ts",
+    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts examples/research-agent/index.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

@@ -36,7 +36,9 @@ export class ResearchAgent implements DurableObject {
     // Start the agent: schedule the first wake if none is pending.
     if (url.pathname === "/start") {
       const existing = await this.ctx.storage.getAlarm();
-      if (existing === null) await this.ctx.storage.setAlarm(Date.now() + this.intervalMs());
+      if (existing === null) {
+        await this.ctx.storage.setAlarm(Date.now() + this.intervalMs());
+      }
       return Response.json({ status: "scheduled", nextWakeInMs: this.intervalMs() });
     }
 

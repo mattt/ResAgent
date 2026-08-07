@@ -1,58 +1,46 @@
 /**
- * env.AI — the OpenAI-compatible HTTP adapter (contract C3).
+ * env.AI — the OpenAI-compatible HTTP layer (contract C3).
  *
- * Celld objects run in V8 and cannot use Deno FFI, so they can't call deno-mlx in-process.
- * Instead `env.AI` inside an object is an HTTP client to this adapter, which runs in-process to
- * the Deno Desktop shell and wraps `@deno-mlx/models` (MLX on Apple Silicon via `mlx-c` FFI).
+ * This module is pure: it maps OpenAI requests/responses to an `InferenceBackend` and knows
+ * nothing about MLX, FFI, or any particular model runtime. The backend is injected, which is how
+ * C3's "the backend is swappable behind the wire format" promise is realized concretely — deno-mlx
+ * is one backend (see backend.ts), a llama-server proxy or an in-test fake are others. Keeping this
+ * layer FFI-free is also what lets the contract test (server_test.ts) run without a model.
  *
- * Endpoints (OpenAI wire format):
+ * Endpoints:
  *   POST /v1/chat/completions   streaming (SSE) and non-streaming
  *   POST /v1/embeddings         single string or array
- *   GET  /v1/models             models currently resident
+ *   GET  /v1/models             models the backend has resident
  *   GET  /healthz
- *
- * Models are Hugging Face Hub repo ids (e.g. "HuggingFaceTB/SmolLM2-360M-Instruct"), loaded
- * lazily and cached. Run: `deno task env-ai` (needs `mlx-c` + a downloaded model — see
- * scripts/bootstrap.sh).
  */
 
-import {
-  type ChatMessage,
-  type Embedder,
-  generate,
-  type GenerateOptions,
-  loadEmbedder,
-  loadModel,
-  type LoadedModel,
-} from "@deno-mlx/models";
+export type Role = "system" | "user" | "assistant";
+export interface ChatMessage {
+  role: Role;
+  content: string;
+}
+
+export interface ChatRequest {
+  model: string;
+  messages: ChatMessage[];
+  maxTokens?: number;
+  temperature?: number;
+  seed?: number;
+}
+
+/** The seam (C3): anything that can stream chat text and produce embeddings. */
+export interface InferenceBackend {
+  /** Stream assistant text deltas for a chat request. */
+  chat(req: ChatRequest): AsyncIterable<string>;
+  /** Embed each input; one vector per text, in order. */
+  embed(model: string, texts: string[]): Promise<Float32Array[]>;
+  /** Ids of models currently resident (for GET /v1/models). */
+  residentModels?(): string[];
+}
 
 const DEFAULT_MAX_TOKENS = 512;
-const PORT = Number(Deno.env.get("RESAGENT_ENV_AI_PORT") ?? "8788");
 
-// ── Model registry (lazy, cached, deduplicated) ──────────────────────────────
-
-const chatModels = new Map<string, Promise<LoadedModel>>();
-const embedders = new Map<string, Promise<Embedder>>();
-
-function getChatModel(repoId: string): Promise<LoadedModel> {
-  let m = chatModels.get(repoId);
-  if (!m) {
-    m = loadModel(repoId);
-    chatModels.set(repoId, m);
-  }
-  return m;
-}
-
-function getEmbedder(repoId: string): Promise<Embedder> {
-  let e = embedders.get(repoId);
-  if (!e) {
-    e = loadEmbedder(repoId);
-    embedders.set(repoId, e);
-  }
-  return e;
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── OpenAI response helpers ──────────────────────────────────────────────────
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -61,63 +49,68 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function oaiError(message: string, status: number, type = "invalid_request_error"): Response {
+function oaiError(
+  message: string,
+  status: number,
+  type = "invalid_request_error",
+): Response {
   return json({ error: { message, type } }, status);
 }
 
-function genOptions(body: Record<string, unknown>): GenerateOptions {
+function parseChatRequest(body: Record<string, unknown>): ChatRequest {
+  if (typeof body.model !== "string") throw new Error("missing `model`");
+  if (!Array.isArray(body.messages)) throw new Error("`messages` must be an array");
+  const messages = body.messages.map((m): ChatMessage => {
+    const role = (m as ChatMessage)?.role;
+    const content = (m as ChatMessage)?.content;
+    if (role !== "system" && role !== "user" && role !== "assistant") {
+      throw new Error(`unsupported message role: ${String(role)}`);
+    }
+    if (typeof content !== "string") {
+      throw new Error("message `content` must be a string");
+    }
+    return { role, content };
+  });
   return {
+    model: body.model,
+    messages,
     maxTokens: typeof body.max_tokens === "number" ? body.max_tokens : DEFAULT_MAX_TOKENS,
     temperature: typeof body.temperature === "number" ? body.temperature : 0,
     ...(typeof body.seed === "number" ? { seed: body.seed } : {}),
   };
 }
 
-function toChatMessages(raw: unknown): ChatMessage[] {
-  if (!Array.isArray(raw)) throw new Error("`messages` must be an array");
-  return raw.map((m) => {
-    const role = (m as ChatMessage).role;
-    const content = (m as ChatMessage).content;
-    if (role !== "system" && role !== "user" && role !== "assistant") {
-      throw new Error(`unsupported message role: ${String(role)}`);
-    }
-    if (typeof content !== "string") throw new Error("message `content` must be a string");
-    return { role, content };
-  });
-}
+// ── Handlers ─────────────────────────────────────────────────────────────────
 
-// ── POST /v1/chat/completions ────────────────────────────────────────────────
+async function chatCompletions(
+  req: Request,
+  backend: InferenceBackend,
+): Promise<Response> {
+  const raw = await req.json().catch(() => null) as Record<string, unknown> | null;
+  if (!raw) return oaiError("invalid JSON body", 400);
 
-async function chatCompletions(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => null) as Record<string, unknown> | null;
-  if (!body || typeof body.model !== "string") {
-    return oaiError("missing `model`", 400);
-  }
-
-  let messages: ChatMessage[];
+  let parsed: ChatRequest;
   try {
-    messages = toChatMessages(body.messages);
+    parsed = parseChatRequest(raw);
   } catch (e) {
     return oaiError((e as Error).message, 400);
   }
 
-  const loaded = await getChatModel(body.model);
-  const promptIds = loaded.tokenizer.applyChatTemplate(messages);
-  const opts = genOptions(body);
   const created = Math.floor(Date.now() / 1000);
   const id = `chatcmpl-${created}-${Math.floor(Math.random() * 1e6)}`;
-  const stream = body.stream === true;
 
-  if (!stream) {
+  if (raw.stream !== true) {
     let text = "";
-    for await (const tok of generate(loaded.model, loaded.tokenizer, promptIds, opts)) {
-      text += tok.text;
+    try {
+      for await (const delta of backend.chat(parsed)) text += delta;
+    } catch (e) {
+      return oaiError((e as Error).message, 500, "server_error");
     }
     return json({
       id,
       object: "chat.completion",
       created,
-      model: body.model,
+      model: parsed.model,
       choices: [{
         index: 0,
         message: { role: "assistant", content: text },
@@ -126,7 +119,7 @@ async function chatCompletions(req: Request): Promise<Response> {
     });
   }
 
-  // Streaming: Server-Sent Events, one delta per token, terminated by [DONE].
+  // Streaming: Server-Sent Events, one delta per chunk, terminated by [DONE].
   const encoder = new TextEncoder();
   const sse = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -136,13 +129,13 @@ async function chatCompletions(req: Request): Promise<Response> {
         id,
         object: "chat.completion.chunk",
         created,
-        model: body.model,
+        model: parsed.model,
         choices: [{ index: 0, delta, finish_reason: finish }],
       });
       try {
         send(frame({ role: "assistant" }, null));
-        for await (const tok of generate(loaded.model, loaded.tokenizer, promptIds, opts)) {
-          send(frame({ content: tok.text }, null));
+        for await (const delta of backend.chat(parsed)) {
+          send(frame({ content: delta }, null));
         }
         send(frame({}, "stop"));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
@@ -162,9 +155,7 @@ async function chatCompletions(req: Request): Promise<Response> {
   });
 }
 
-// ── POST /v1/embeddings ──────────────────────────────────────────────────────
-
-async function embeddings(req: Request): Promise<Response> {
+async function embeddings(req: Request, backend: InferenceBackend): Promise<Response> {
   const body = await req.json().catch(() => null) as Record<string, unknown> | null;
   if (!body || typeof body.model !== "string") return oaiError("missing `model`", 400);
 
@@ -176,8 +167,12 @@ async function embeddings(req: Request): Promise<Response> {
     : null;
   if (!texts) return oaiError("`input` must be a string or string[]", 400);
 
-  const embedder = await getEmbedder(body.model);
-  const vectors = embedder.embedAll(texts);
+  let vectors: Float32Array[];
+  try {
+    vectors = await backend.embed(body.model, texts);
+  } catch (e) {
+    return oaiError((e as Error).message, 500, "server_error");
+  }
   return json({
     object: "list",
     model: body.model,
@@ -189,27 +184,32 @@ async function embeddings(req: Request): Promise<Response> {
   });
 }
 
-// ── Router ───────────────────────────────────────────────────────────────────
+// ── App factory ──────────────────────────────────────────────────────────────
 
-function route(req: Request): Promise<Response> | Response {
-  const { pathname } = new URL(req.url);
-  if (req.method === "GET" && pathname === "/healthz") return new Response("ok");
-  if (req.method === "GET" && pathname === "/v1/models") {
-    const data = [...chatModels.keys(), ...embedders.keys()].map((id) => ({
-      id,
-      object: "model",
-      owned_by: "deno-mlx",
-    }));
-    return json({ object: "list", data });
-  }
-  if (req.method === "POST" && pathname === "/v1/chat/completions") return chatCompletions(req);
-  if (req.method === "POST" && pathname === "/v1/embeddings") return embeddings(req);
-  return oaiError(`no route for ${req.method} ${pathname}`, 404, "not_found");
+/** Build the request handler for a given inference backend. */
+export function createApp(
+  backend: InferenceBackend,
+): (req: Request) => Promise<Response> {
+  return (req: Request): Promise<Response> => {
+    const { pathname } = new URL(req.url);
+    if (req.method === "GET" && pathname === "/healthz") {
+      return Promise.resolve(new Response("ok"));
+    }
+    if (req.method === "GET" && pathname === "/v1/models") {
+      const ids = backend.residentModels?.() ?? [];
+      return Promise.resolve(json({
+        object: "list",
+        data: ids.map((id) => ({ id, object: "model", owned_by: "resagent" })),
+      }));
+    }
+    if (req.method === "POST" && pathname === "/v1/chat/completions") {
+      return chatCompletions(req, backend);
+    }
+    if (req.method === "POST" && pathname === "/v1/embeddings") {
+      return embeddings(req, backend);
+    }
+    return Promise.resolve(
+      oaiError(`no route for ${req.method} ${pathname}`, 404, "not_found"),
+    );
+  };
 }
-
-if (import.meta.main) {
-  Deno.serve({ port: PORT, hostname: "127.0.0.1" }, (req) => route(req));
-  console.info(`env.AI adapter listening on http://127.0.0.1:${PORT} (backend: deno-mlx)`);
-}
-
-export { route };
