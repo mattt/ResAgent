@@ -1,0 +1,96 @@
+/**
+ * Contract test for C4: the HCL manifest parses and lowers to a valid wrangler.toml.
+ *
+ * Parses the real example manifest, checks the typed model, then translates and round-trips the
+ * emitted TOML (parse it back) to verify the wrangler structure — and that ResAgent-level blocks
+ * (ai/folder/gate/serve) are deliberately absent from the deploy output.
+ */
+
+import { assert, assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@^1";
+import { parse as parseToml } from "@std/toml";
+import { parseManifest } from "./parse.ts";
+import { toWrangler } from "./wrangler.ts";
+import type { Manifest } from "./types.ts";
+
+const exampleUrl = new URL("../../examples/research-agent/resagent.hcl", import.meta.url);
+const example = await Deno.readTextFile(exampleUrl);
+
+Deno.test("parses the manifest into the typed model", async () => {
+  const m = await parseManifest(example);
+
+  assertEquals(m.namespaces.length, 1);
+  const ns = m.namespaces[0];
+  assertEquals(ns.name, "research");
+  assertEquals(ns.objects.length, 1);
+
+  const o = ns.objects[0];
+  assertEquals(o.name, "ResearchAgent");
+  assertEquals(o.entrypoint, "index.ts");
+  assertEquals(o.className, "ResearchAgent");
+  assertEquals(o.env.MODEL, "HuggingFaceTB/SmolLM2-360M-Instruct");
+  assertEquals(o.env.INTERVAL_MS, "3600000");
+  assertEquals(o.ai[0].endpoint, "http://127.0.0.1:8788");
+  assertEquals(o.folders[0].grant, "~/ResAgent/research");
+  assertEquals(o.folders[0].mode, "read-write");
+
+  // Non-deploy blocks parse too (one grammar, C4).
+  assertEquals(m.gates[0].target, "research/ResearchAgent");
+  assertEquals(m.gates[0].denyDefault, true);
+  assertEquals(m.gates[0].approver, "local-judge");
+  assert(m.gates[0].allow[0].hosts.includes("huggingface.co"));
+  assertEquals(m.serves[0].pattern, "research/*");
+  assertEquals(m.serves[0].funnel, false);
+  assert(m.serves[0].tailnetUsers.includes("mattt@"));
+});
+
+Deno.test("lowers to a valid wrangler.toml (round-tripped)", async () => {
+  const m = await parseManifest(example);
+  const { toml, warnings } = toWrangler(m);
+
+  const w = parseToml(toml) as Record<string, unknown>;
+  assertEquals(w.name, "research");
+  assertEquals(w.main, "index.ts");
+  assert(typeof w.compatibility_date === "string");
+
+  const dobj = w.durable_objects as { bindings: { name: string; class_name: string }[] };
+  assertEquals(dobj.bindings[0].name, "ResearchAgent");
+  assertEquals(dobj.bindings[0].class_name, "ResearchAgent");
+
+  const migrations = w.migrations as { tag: string; new_sqlite_classes: string[] }[];
+  assert(migrations[0].new_sqlite_classes.includes("ResearchAgent"));
+
+  const vars = w.vars as Record<string, string>;
+  assertEquals(vars.MODEL, "HuggingFaceTB/SmolLM2-360M-Instruct");
+
+  // ResAgent-level blocks must NOT leak into the deploy output.
+  assertEquals(w.gate, undefined);
+  assertEquals(w.serve, undefined);
+  assert(!("ai" in w));
+
+  // The dropped ai/folder bindings are surfaced, not silent.
+  assert(warnings.some((x) => x.includes("ai/folder")));
+});
+
+Deno.test("rejects a namespace whose objects disagree on entrypoint", () => {
+  const m: Manifest = {
+    namespaces: [{
+      name: "n",
+      objects: [
+        { name: "A", entrypoint: "a.ts", className: "A", env: {}, ai: [], folders: [] },
+        { name: "B", entrypoint: "b.ts", className: "B", env: {}, ai: [], folders: [] },
+      ],
+    }],
+    gates: [],
+    serves: [],
+  };
+  assertThrows(() => toWrangler(m), Error, "share one entrypoint");
+});
+
+Deno.test("rejects an unknown namespace name", async () => {
+  const m = await parseManifest(example);
+  assertThrows(() => toWrangler(m, "nope"), Error, 'no namespace "nope"');
+});
+
+Deno.test("parseManifest rejects malformed HCL", async () => {
+  await assertRejects(() => parseManifest("namespace {", "bad.hcl"));
+});

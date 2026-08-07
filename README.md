@@ -20,8 +20,9 @@ plan's hedge track.
 ## Layout
 
 ```
-src/ai/server.ts          env.AI: OpenAI-compatible HTTP adapter over deno-mlx (M4)
+src/ai/                   env.AI: OpenAI HTTP layer (server) + deno-mlx backend + entry (M4, C3)
 src/hub/pull.ts           HF Hub model downloads, native TS + Xet-accelerated (M4)
+src/manifest/             HCL manifest → typed model → wrangler.toml for celld deploy (M2, C4)
 examples/research-agent/  the flagship durable object + its HCL manifest
 launchd/                  LaunchAgent plists for the supervised services (celld, minio)
 scripts/bootstrap.sh      one-time host setup (fetches celld, mlx-c, minio, a model)

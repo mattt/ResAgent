@@ -2,8 +2,9 @@
   "tasks": {
     "env-ai": "deno run --allow-ffi --allow-env --allow-read --allow-write --allow-net --unstable-ffi src/ai/main.ts",
     "pull": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys src/hub/pull.ts",
-    "test": "deno test src/ai/server_test.ts",
-    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts examples/research-agent/index.ts",
+    "translate": "deno run --allow-read --allow-env src/manifest/translate.ts",
+    "test": "deno test --allow-read --allow-env src/",
+    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts examples/research-agent/index.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
@@ -12,7 +13,9 @@
     "@deno-mlx/core": "https://raw.githubusercontent.com/mattt/deno-mlx/main/packages/core/mod.ts",
     "@deno-mlx/tensor": "https://raw.githubusercontent.com/mattt/deno-mlx/main/packages/tensor/mod.ts",
     "@huggingface/hub": "npm:@huggingface/hub@^2.14.0",
-    "@huggingface/transformers": "npm:@huggingface/transformers@^3"
+    "@huggingface/transformers": "npm:@huggingface/transformers@^3",
+    "@cdktf/hcl2json": "npm:@cdktf/hcl2json@^0.21.0",
+    "@std/toml": "jsr:@std/toml@^1"
   },
   "fmt": {
     "useTabs": false,
