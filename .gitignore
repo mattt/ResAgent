@@ -1,0 +1,18 @@
+# Deno
+.deno/
+deno.lock.local
+
+# Local runtime state (buckets, cell SQLite, logs) — never committed
+/run/
+/data/
+*.log
+
+# macOS
+.DS_Store
+
+# Secrets — credentials live in Keychain, never on disk
+*.pem
+*.key
+.env
+.env.*
+!.env.example

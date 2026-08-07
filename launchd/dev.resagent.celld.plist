@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the Celld runtime daemon.
+  A LaunchAgent (not a LaunchDaemon) so it runs in the user session with TCC attribution and
+  Keychain access. Trade-off: alarms don't fire while logged out — documented constraint (M1).
+  Depends on dev.resagent.minio being up (the bucket is Celld's coordination substrate).
+  Installed by scripts/bootstrap.sh, which substitutes __RESAGENT_HOME__.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.resagent.celld</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__RESAGENT_HOME__/scripts/run-celld.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>StandardOutPath</key>
+  <string>__RESAGENT_HOME__/run/logs/celld.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__RESAGENT_HOME__/run/logs/celld.err.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

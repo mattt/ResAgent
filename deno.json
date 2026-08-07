@@ -1,0 +1,26 @@
+{
+  "tasks": {
+    "env-ai": "deno run --allow-ffi --allow-env --allow-read --allow-write --allow-net --unstable-ffi src/ai/server.ts",
+    "pull": "deno run --allow-net --allow-read --allow-write --allow-env --allow-sys src/hub/pull.ts",
+    "check": "deno check src/ai/server.ts src/hub/pull.ts examples/research-agent/index.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+  "imports": {
+    "@deno-mlx/models": "https://raw.githubusercontent.com/mattt/deno-mlx/main/packages/models/mod.ts",
+    "@deno-mlx/core": "https://raw.githubusercontent.com/mattt/deno-mlx/main/packages/core/mod.ts",
+    "@deno-mlx/tensor": "https://raw.githubusercontent.com/mattt/deno-mlx/main/packages/tensor/mod.ts",
+    "@huggingface/hub": "npm:@huggingface/hub@^2.14.0",
+    "@huggingface/transformers": "npm:@huggingface/transformers@^3"
+  },
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 90,
+    "indentWidth": 2,
+    "semiColons": true,
+    "singleQuote": false
+  },
+  "lint": {
+    "rules": { "tags": ["recommended"] }
+  }
+}

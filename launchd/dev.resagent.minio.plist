@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the bundled S3-compatible object store (MinIO).
+  Celld requires an S3 bucket as its coordination substrate; on a single Mac we supply it locally.
+  Installed to ~/Library/LaunchAgents by scripts/bootstrap.sh, which substitutes __RESAGENT_HOME__.
+  Runs a wrapper that reads credentials from Keychain — secrets never live in this plist.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.resagent.minio</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__RESAGENT_HOME__/scripts/run-minio.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__RESAGENT_HOME__/run/logs/minio.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__RESAGENT_HOME__/run/logs/minio.err.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
