@@ -112,4 +112,49 @@ export const cases: Case[] = [
       { op: { kind: "getAlarm" }, expect: null },
     ],
   },
+  {
+    name: "batch put/get",
+    description:
+      "putMany writes entries; getMany returns found keys as sorted pairs, omitting misses",
+    steps: [
+      { op: { kind: "putMany", entries: { a: 1, b: 2, c: 3 } }, expect: null },
+      { op: { kind: "getMany", keys: ["c", "a", "zzz"] }, expect: [["a", 1], ["c", 3]] },
+      { op: { kind: "list" }, expect: [["a", 1], ["b", 2], ["c", 3]] },
+    ],
+  },
+  {
+    name: "batch delete",
+    description: "deleteMany returns the count of keys that existed",
+    steps: [
+      { op: { kind: "putMany", entries: { a: 1, b: 2, c: 3 } }, expect: null },
+      { op: { kind: "deleteMany", keys: ["a", "c", "nope"] }, expect: 2 },
+      { op: { kind: "list" }, expect: [["b", 2]] },
+    ],
+  },
+  {
+    name: "list: start + end range",
+    description: "start is inclusive, end is exclusive",
+    steps: [
+      {
+        op: { kind: "putMany", entries: { k1: 1, k2: 2, k3: 3, k4: 4, k5: 5 } },
+        expect: null,
+      },
+      {
+        op: { kind: "list", options: { start: "k2", end: "k4" } },
+        expect: [["k2", 2], ["k3", 3]],
+      },
+    ],
+  },
+  {
+    name: "list: startAfter + reverse + limit",
+    description:
+      "startAfter is exclusive; reverse then limit apply to the selected range",
+    steps: [
+      { op: { kind: "putMany", entries: { a: 1, b: 2, c: 3, d: 4 } }, expect: null },
+      {
+        op: { kind: "list", options: { startAfter: "a", reverse: true, limit: 2 } },
+        expect: [["d", 4], ["c", 3]],
+      },
+    ],
+  },
 ];

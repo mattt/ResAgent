@@ -17,6 +17,12 @@ export type Json =
 
 export interface ListOptions {
   prefix?: string;
+  /** Inclusive lower bound. */
+  start?: string;
+  /** Exclusive lower bound (mutually exclusive with `start`). */
+  startAfter?: string;
+  /** Exclusive upper bound. */
+  end?: string;
   limit?: number;
   reverse?: boolean;
 }
@@ -29,7 +35,11 @@ export type Op =
   | { kind: "deleteAll" }
   | { kind: "setAlarm"; scheduledTime: number }
   | { kind: "getAlarm" }
-  | { kind: "deleteAlarm" };
+  | { kind: "deleteAlarm" }
+  // Batch variants of the standard DO storage API.
+  | { kind: "putMany"; entries: Record<string, Json> }
+  | { kind: "getMany"; keys: string[] }
+  | { kind: "deleteMany"; keys: string[] };
 
 /** Every op returns a JSON-serializable result so it compares identically across engines. */
 export type OpResult = Json;

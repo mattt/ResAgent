@@ -35,12 +35,28 @@ export async function applyOp(storage: DurableObjectStorage, op: Op): Promise<Op
     case "deleteAlarm":
       await storage.deleteAlarm();
       return null;
+    case "putMany":
+      await storage.put(op.entries);
+      return null;
+    case "getMany": {
+      const map = await storage.get<Json>(op.keys);
+      // Sort found pairs by key so the result compares identically across engines.
+      return [...map.entries()].sort((
+        a,
+        b,
+      ) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)) as Json;
+    }
+    case "deleteMany":
+      return await storage.delete(op.keys);
   }
 }
 
 function toListOptions(options: ListOptions = {}): DurableObjectListOptions {
   const out: DurableObjectListOptions = {};
   if (options.prefix !== undefined) out.prefix = options.prefix;
+  if (options.start !== undefined) out.start = options.start;
+  if (options.startAfter !== undefined) out.startAfter = options.startAfter;
+  if (options.end !== undefined) out.end = options.end;
   if (options.limit !== undefined) out.limit = options.limit;
   if (options.reverse !== undefined) out.reverse = options.reverse;
   return out;

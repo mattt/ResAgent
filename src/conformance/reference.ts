@@ -51,6 +51,20 @@ class ReferenceInstance implements EngineInstance {
         // Durable Objects' deleteAlarm() returns void (unlike delete(key), which returns boolean).
         this.#alarms.delete(objectId);
         return Promise.resolve(null);
+      case "putMany":
+        for (const [k, v] of Object.entries(op.entries)) store.set(k, v);
+        return Promise.resolve(null);
+      case "getMany": {
+        // Found keys as sorted [key, value] pairs (missing omitted). Sorting normalizes order so
+        // the result compares identically across engines.
+        const found = op.keys.filter((k) => store.has(k)).sort();
+        return Promise.resolve(found.map((k) => [k, store.get(k)!] as Json));
+      }
+      case "deleteMany": {
+        let count = 0;
+        for (const k of op.keys) if (store.delete(k)) count++;
+        return Promise.resolve(count);
+      }
     }
   }
 
@@ -59,6 +73,11 @@ class ReferenceInstance implements EngineInstance {
     if (options.prefix !== undefined) {
       keys = keys.filter((k) => k.startsWith(options.prefix!));
     }
+    if (options.start !== undefined) keys = keys.filter((k) => k >= options.start!);
+    if (options.startAfter !== undefined) {
+      keys = keys.filter((k) => k > options.startAfter!);
+    }
+    if (options.end !== undefined) keys = keys.filter((k) => k < options.end!);
     keys.sort();
     if (options.reverse) keys.reverse();
     if (options.limit !== undefined) keys = keys.slice(0, options.limit);

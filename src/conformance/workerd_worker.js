@@ -39,6 +39,9 @@ export class OpExecutor {
         const o = op.options || {};
         const opts = {};
         if (o.prefix !== undefined) opts.prefix = o.prefix;
+        if (o.start !== undefined) opts.start = o.start;
+        if (o.startAfter !== undefined) opts.startAfter = o.startAfter;
+        if (o.end !== undefined) opts.end = o.end;
         if (o.limit !== undefined) opts.limit = o.limit;
         if (o.reverse !== undefined) opts.reverse = o.reverse;
         const map = await s.list(opts);
@@ -55,6 +58,22 @@ export class OpExecutor {
       case "deleteAlarm":
         await s.deleteAlarm();
         result = null;
+        break;
+      case "putMany":
+        await s.put(op.entries);
+        result = null;
+        break;
+      case "getMany": {
+        const map = await s.get(op.keys);
+        // Sort found pairs by key so the result compares identically across engines.
+        result = [...map.entries()].sort((
+          a,
+          b,
+        ) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+        break;
+      }
+      case "deleteMany":
+        result = await s.delete(op.keys);
         break;
       default:
         return new Response(`unknown op: ${op.kind}`, { status: 400 });
