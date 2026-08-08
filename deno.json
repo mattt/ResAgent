@@ -6,8 +6,9 @@
     "validate": "deno run --allow-read --allow-env src/manifest/validate.ts",
     "conformance": "deno run --allow-read --allow-env src/conformance/run.ts",
     "oracle": "deno run --allow-read --allow-write --allow-env --allow-run --allow-net --allow-sys src/conformance/run.ts workerd",
+    "lint:objects": "deno run --allow-read src/lint/object_lint.ts",
     "test": "deno test --allow-read --allow-env src/",
-    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts src/conformance/run.ts src/conformance/op_executor.ts examples/research-agent/index.ts",
+    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts src/conformance/run.ts src/conformance/op_executor.ts src/lint/object_lint.ts examples/research-agent/index.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },
