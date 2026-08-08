@@ -157,4 +157,58 @@ export const cases: Case[] = [
       },
     ],
   },
+  {
+    name: "value fidelity: nested JSON",
+    description:
+      "objects, arrays, booleans, null, and unicode strings round-trip unchanged",
+    steps: [
+      {
+        op: {
+          kind: "put",
+          key: "doc",
+          value: {
+            s: "héllo",
+            b: true,
+            z: null,
+            arr: [1, "two", false, null],
+            nested: { a: 1, b: [2, 3] },
+          },
+        },
+        expect: null,
+      },
+      {
+        op: { kind: "get", key: "doc" },
+        expect: {
+          s: "héllo",
+          b: true,
+          z: null,
+          arr: [1, "two", false, null],
+          nested: { a: 1, b: [2, 3] },
+        },
+      },
+      // A stored null value is visible via list even though get can't distinguish it from a miss.
+      {
+        op: { kind: "put", key: "nil", value: null },
+        expect: null,
+      },
+      { op: { kind: "get", key: "nil" }, expect: null },
+    ],
+  },
+  {
+    name: "value fidelity: numbers",
+    description: "zero, negatives, MAX_SAFE_INTEGER, and floats survive the round-trip",
+    steps: [
+      {
+        op: {
+          kind: "putMany",
+          entries: { z: 0, neg: -17, big: 9007199254740991, f: 3.14159 },
+        },
+        expect: null,
+      },
+      {
+        op: { kind: "getMany", keys: ["z", "neg", "big", "f"] },
+        expect: [["big", 9007199254740991], ["f", 3.14159], ["neg", -17], ["z", 0]],
+      },
+    ],
+  },
 ];
