@@ -1,0 +1,49 @@
+# CI — the engine-neutral contracts as gates on every push.
+# Runs on Apple Silicon (macos-latest) to match the project's arm64-only deps (workerd, deno-mlx).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Cache Deno dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/deno
+          key: deno-${{ runner.os }}-${{ hashFiles('deno.lock') }}
+          restore-keys: deno-${{ runner.os }}-
+
+      - name: Format check
+        run: deno fmt --check src/ examples/
+
+      - name: Lint
+        run: deno task lint
+
+      - name: Type-check
+        run: deno task check
+
+      - name: Unit tests
+        run: deno task test
+
+      - name: C1 — object-source lint
+        run: deno task lint:objects
+
+      - name: C2 — conformance (reference engine)
+        run: deno task conformance
+
+      - name: C2 — conformance oracle (real workerd)
+        run: deno task oracle
