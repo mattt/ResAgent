@@ -10,6 +10,7 @@
 import { cases } from "./cases.ts";
 import { referenceEngine } from "./reference.ts";
 import { workerdEngine } from "./workerd.ts";
+import { celldEngine } from "./celld.ts";
 import { formatReport, runSuite } from "./runner.ts";
 import type { Engine } from "./engine.ts";
 
@@ -19,8 +20,10 @@ function engineByName(name: string): Engine {
       return referenceEngine;
     case "workerd":
       return workerdEngine();
+    case "celld":
+      return celldEngine();
     default:
-      throw new Error(`unknown engine "${name}" (have: reference, workerd)`);
+      throw new Error(`unknown engine "${name}" (have: reference, workerd, celld)`);
   }
 }
 
