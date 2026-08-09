@@ -184,11 +184,20 @@ Recommended mechanism, in preference order:
    gateway exposes. Uncertain that clawpatrol exposes a plain CONNECT proxy (its transport is
    WG/Tailscale); to be probed during the spike.
 
-The transport is modeled as a pluggable detail behind `ClawPatrolGate.startGateway()`; **M6 does not
-block on the live tunnel.** The verdict + translator legs are proven via `validate`/`test`. If the
-system extension can be approved interactively (`Clawpatrol.app` is installed), we attempt the live
-`run` demo; if the OS blocks it without a password/GUI step, we record the exact blocker and ship the
-validate/test-backed demo. **This is a true-technical-blocker candidate; it does not block the rest.**
+The transport is modeled as a pluggable detail; **M6 does not block on the live tunnel.** The verdict
++ translator legs are proven via `validate`/`test`.
+
+**Spike result (verified this session, clawpatrol 0.5.8):**
+- ✅ **A local `clawpatrol gateway` boots with our translated config** — it applied its migrations,
+  loaded `policy: 1 endpoints across 0 profiles`, brought up the WireGuard promiscuous forwarder, and
+  listened on `127.0.0.1:8443`, staying up. The gateway + ResAgent-derived policy are real and live.
+- ✅ Verdicts proven equivalent to real Claw Patrol via `clawpatrol test` (6/6).
+- ⚠️ **The client tunnel is the blocker.** `clawpatrol run` needs `~/.config/clawpatrol/wg.conf` from
+  `clawpatrol join`, which onboards via a WireGuard device flow requiring the **macOS NetworkExtension
+  system extension** (`clawpatrol status` → `✗ system extension`). Approving it is a GUI action in
+  System Settings needing admin — a **user action** (and "modifying system/security settings" is
+  off-limits to the agent). This is the documented true-technical-blocker; approving the extension
+  unblocks the live `clawpatrol run` demo. Everything up to it is done and verified.
 
 ## Keychain credential-injection flow
 

@@ -47,3 +47,8 @@ jobs:
 
       - name: C2 — conformance oracle (real workerd)
         run: deno task oracle
+
+      - name: M6 — gate corpus (reference gate)
+        run: deno task gate:reference
+        # gate:validate / gate:clawpatrol need the clawpatrol binary and run locally,
+        # mirroring conformance:celld (its engine isn't installed in CI either).
