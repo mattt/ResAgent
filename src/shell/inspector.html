@@ -1,0 +1,814 @@
+<!--
+  ResAgent inspector — the control-plane UI in the ResEdit idiom (M3, contract C5 consumer).
+
+  Self-contained: renders against window.__RESAGENT_API__ when the Deno Desktop shell injects the
+  real ProtocolClient, otherwise against a built-in fixture so the page is viewable standalone in a
+  browser. The DaemonAPI shape mirrors src/protocol/client.ts exactly. No build step, no external
+  assets — it loads over file:// and inside Deno.BrowserWindow unchanged.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ResAgent — Inspector</title>
+    <style>
+    :root {
+      --desktop: #8f8f8f;
+      --paper: #ffffff;
+      --ink: #000000;
+      --muted: #5a5a5a;
+      --rule: #000000;
+      --alarm: #b21807; /* the one accent — alarms/errors only */
+      --sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+      --mono: "Monaco", "Menlo", "Cascadia Mono", ui-monospace, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      /* the classic 50%-gray Mac desktop, faked with a fine dither */
+      background-color: var(--desktop);
+      background-image:
+        linear-gradient(45deg, #00000010 25%, transparent 25%, transparent 75%, #00000010
+        75%),
+        linear-gradient(45deg, #00000010 25%, transparent 25%, transparent 75%, #00000010
+        75%);
+      background-size: 4px 4px;
+      background-position: 0 0, 2px 2px;
+      font-family: var(--sans);
+      color: var(--ink);
+      display: flex;
+      padding: 22px;
+    }
+
+    /* ── Window chrome ─────────────────────────────────────────── */
+    .window {
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.55);
+      width: 100%;
+      max-width: 940px;
+      height: 100%;
+      max-height: 620px;
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .titlebar {
+      position: relative;
+      height: 22px;
+      border-bottom: 1px solid var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* the six System-7 title lines */
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--ink) 0, var(--ink) 1px,
+        var(--paper) 1px, var(--paper) 3px
+      );
+    }
+    .titlebar__title {
+      background: var(--paper);
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .titlebar__close {
+      position: absolute;
+      left: 8px;
+      width: 12px;
+      height: 12px;
+      background: var(--paper);
+      border: 1px solid var(--ink);
+    }
+
+    /* ── Three-pane body ───────────────────────────────────────── */
+    .panes {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 172px 210px 1fr;
+      min-height: 0;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-right: 1px solid var(--ink);
+    }
+    .pane:last-child {
+      border-right: 0;
+    }
+
+    .pane__head {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--ink);
+      background: #f2f2f2;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .pane__count {
+      font-family: var(--mono);
+      letter-spacing: 0;
+    }
+    .pane__body {
+      flex: 1;
+      overflow: auto;
+    }
+
+    /* ── Rows (resource lists) ─────────────────────────────────── */
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-bottom: 1px solid #e4e4e4;
+      cursor: default;
+      user-select: none;
+    }
+    .row:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: -2px;
+    }
+    .row:hover {
+      background: #f0f0f0;
+    }
+    .row[aria-selected="true"] {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .row__name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .row__meta {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .row[aria-selected="true"] .row__meta {
+      color: #cfcfcf;
+    }
+
+    /* the resource-type glyph — a tiny stacked "fork" mark */
+    .glyph {
+      flex: 0 0 auto;
+      width: 13px;
+      height: 13px;
+      border: 1px solid currentColor;
+      position: relative;
+      background:
+        linear-gradient(currentColor, currentColor) 2px 3px / 7px 1px no-repeat,
+        linear-gradient(currentColor, currentColor) 2px 6px / 7px 1px no-repeat,
+        linear-gradient(currentColor, currentColor) 2px 9px / 4px 1px no-repeat;
+    }
+
+    .alarm-dot {
+      flex: 0 0 auto;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--alarm);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .alarm-dot {
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+    }
+    @keyframes pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.35;
+      }
+    }
+
+    /* ── Inspector pane ────────────────────────────────────────── */
+    .tabs {
+      flex: 0 0 auto;
+      display: flex;
+      gap: -1px;
+      padding: 6px 8px 0;
+      border-bottom: 1px solid var(--ink);
+      background: #f2f2f2;
+    }
+    .tab {
+      font-family: var(--sans);
+      font-size: 11px;
+      padding: 3px 12px;
+      border: 1px solid var(--ink);
+      border-bottom: none;
+      background: #dcdcdc;
+      margin-right: 4px;
+      cursor: default;
+      position: relative;
+      top: 1px;
+    }
+    .tab[aria-selected="true"] {
+      background: var(--paper);
+    }
+    .tab:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 1px;
+    }
+
+    .inspector__toolbar[hidden] {
+      display: none;
+    }
+    .inspector__toolbar {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 5px 8px;
+      border-bottom: 1px solid #d0d0d0;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .segmented {
+      display: inline-flex;
+      border: 1px solid var(--ink);
+    }
+    .segmented button {
+      font-family: var(--sans);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 2px 9px;
+      background: var(--paper);
+      border: none;
+      border-right: 1px solid var(--ink);
+      cursor: default;
+    }
+    .segmented button:last-child {
+      border-right: none;
+    }
+    .segmented button[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .segmented button:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 1px;
+    }
+
+    .inspector__body {
+      flex: 1;
+      overflow: auto;
+    }
+
+    /* typed storage table */
+    table.kv {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    table.kv th {
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      font-weight: 700;
+      padding: 4px 10px;
+      border-bottom: 1px solid var(--ink);
+      position: sticky;
+      top: 0;
+      background: var(--paper);
+    }
+    table.kv td {
+      padding: 4px 10px;
+      border-bottom: 1px solid #ececec;
+      vertical-align: top;
+    }
+    td.k {
+      font-family: var(--mono);
+      white-space: nowrap;
+      width: 34%;
+    }
+    td.v {
+      font-family: var(--mono);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .type-tag {
+      display: inline-block;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      border: 1px solid #c8c8c8;
+      padding: 0 4px;
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+
+    /* raw / hex dump */
+    pre.hex {
+      margin: 0;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre;
+    }
+    .hex .off {
+      color: var(--muted);
+    }
+    .hex .asc {
+      color: var(--ink);
+    }
+
+    .empty {
+      padding: 20px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .field {
+      padding: 10px;
+      font-size: 12px;
+    }
+    .field b {
+      font-family: var(--mono);
+      font-weight: 400;
+    }
+
+    /* ── Status bar ────────────────────────────────────────────── */
+    .statusbar {
+      flex: 0 0 auto;
+      border-top: 1px solid var(--ink);
+      background: #f2f2f2;
+      padding: 3px 10px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      gap: 16px;
+    }
+    .statusbar .src {
+      margin-left: auto;
+    }
+
+    @media (max-width: 720px) {
+      body {
+        padding: 0;
+      }
+      .window {
+        max-height: none;
+        box-shadow: none;
+      }
+      .panes {
+        grid-template-columns: 1fr;
+        grid-auto-rows: minmax(120px, auto);
+      }
+      .pane {
+        border-right: 0;
+        border-bottom: 1px solid var(--ink);
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <main class="window" role="application" aria-label="ResAgent object inspector">
+      <div class="titlebar">
+        <span class="titlebar__close" aria-hidden="true"></span>
+        <span class="titlebar__title" id="winTitle">ResAgent</span>
+      </div>
+
+      <div class="panes">
+        <section class="pane" aria-label="Namespaces">
+          <div
+            class="pane__head"><span>Namespaces</span><span class="pane__count" id="nsCount"></span></div>
+          <div class="pane__body" id="nsList" role="listbox" tabindex="0"></div>
+        </section>
+
+        <section class="pane" aria-label="Objects">
+          <div
+            class="pane__head"><span>Objects</span><span class="pane__count" id="objCount"></span></div>
+          <div class="pane__body" id="objList" role="listbox" tabindex="0"></div>
+        </section>
+
+        <section class="pane" aria-label="Inspector">
+          <div class="tabs" id="tabs" role="tablist">
+            <span class="tab" role="tab" data-tab="storage" aria-selected="true"
+              tabindex="0">Storage</span>
+            <span class="tab" role="tab" data-tab="alarm" aria-selected="false"
+              tabindex="0">Alarm</span>
+            <span class="tab" role="tab" data-tab="logs" aria-selected="false"
+              tabindex="0">Logs</span>
+          </div>
+          <div class="inspector__toolbar" id="toolbar" hidden>
+            <span id="toolbarLabel"></span>
+            <span class="segmented" role="group" aria-label="Value view">
+              <button id="viewTyped" aria-pressed="true">Typed</button>
+              <button id="viewRaw" aria-pressed="false">Raw / Hex</button>
+            </span>
+          </div>
+          <div class="inspector__body" id="inspectorBody">
+            <p class="empty">Select an object to read its state.</p>
+          </div>
+        </section>
+      </div>
+
+      <div class="statusbar">
+        <span id="stEngine">engine —</span>
+        <span id="stSel"></span>
+        <span class="src" id="stSrc"></span>
+      </div>
+    </main>
+
+    <script>
+    // ── The data source ────────────────────────────────────────────
+    // In the Deno Desktop shell the daemon is exposed via the `bindings` global (win.bind); in a
+    // plain browser we fall back to a built-in fixture. window.__RESAGENT_API__ is an explicit
+    // override for tests/embeds.
+    const bridge = globalThis.bindings;
+    const LIVE = Boolean(window.__RESAGENT_API__ || bridge);
+    const api = window.__RESAGENT_API__ ?? (bridge ? bindingsApi(bridge) : fixtureApi());
+
+    function bindingsApi(b) {
+      return {
+        status: () => b.status(),
+        namespaces: () => b.namespaces(),
+        objects: (ns) => b.objects(ns),
+        storageList: (ns, id, opts = {}) => b.storageList(ns, id, opts),
+        storageGet: (ns, id, key) => b.storageGet(ns, id, key),
+        alarmGet: (ns, id) => b.alarmGet(ns, id),
+        logsTail: (opts = {}) => b.logsTail(opts),
+      };
+    }
+
+    const state = { ns: null, obj: null, tab: "storage", view: "typed" };
+
+    // ── Rendering ───────────────────────────────────────────────────
+    const el = (id) => document.getElementById(id);
+
+    function rowEl({ glyph, name, meta, alarm, selected, onClick }) {
+      const div = document.createElement("div");
+      div.className = "row";
+      div.setAttribute("role", "option");
+      div.tabIndex = 0;
+      div.setAttribute("aria-selected", String(Boolean(selected)));
+      if (glyph) {
+        const g = document.createElement("span");
+        g.className = "glyph";
+        div.append(g);
+      }
+      if (alarm) {
+        const a = document.createElement("span");
+        a.className = "alarm-dot";
+        a.title = "alarm set";
+        div.append(a);
+      }
+      const n = document.createElement("span");
+      n.className = "row__name";
+      n.textContent = name;
+      div.append(n);
+      if (meta) {
+        const m = document.createElement("span");
+        m.className = "row__meta";
+        m.textContent = meta;
+        div.append(m);
+      }
+      const go = () => onClick();
+      div.addEventListener("click", go);
+      div.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          go();
+        }
+      });
+      return div;
+    }
+
+    async function loadNamespaces() {
+      const st = await api.status();
+      el("stEngine").textContent = `engine ${st.engine} · v${st.version}`;
+      el("stSrc").textContent = LIVE ? "● live daemon" : "○ fixture data";
+      const list = await api.namespaces();
+      el("nsCount").textContent = String(list.length);
+      const box = el("nsList");
+      box.replaceChildren();
+      for (const ns of list) {
+        box.append(rowEl({
+          glyph: true,
+          name: ns.name,
+          meta: String(ns.objectCount),
+          selected: ns.name === state.ns,
+          onClick: () => selectNamespace(ns.name),
+        }));
+      }
+      if (!state.ns && list.length) selectNamespace(list[0].name);
+    }
+
+    async function selectNamespace(name) {
+      state.ns = name;
+      state.obj = null;
+      el("winTitle").textContent = `ResAgent — ${name}`;
+      for (const r of el("nsList").children) {
+        r.setAttribute(
+          "aria-selected",
+          String(r.querySelector(".row__name").textContent === name),
+        );
+      }
+      const objs = await api.objects(name);
+      el("objCount").textContent = String(objs.length);
+      const box = el("objList");
+      box.replaceChildren();
+      for (const o of objs) {
+        box.append(rowEl({
+          name: o.name,
+          meta: o.id,
+          alarm: o.hasAlarm,
+          selected: false,
+          onClick: () => selectObject(o),
+        }));
+      }
+      renderInspector();
+    }
+
+    async function selectObject(o) {
+      state.obj = o;
+      for (const r of el("objList").children) {
+        r.setAttribute(
+          "aria-selected",
+          String(r.querySelector(".row__name").textContent === o.name),
+        );
+      }
+      el("stSel").textContent = `${state.ns}/${o.name}`;
+      renderInspector();
+    }
+
+    function setTab(tab) {
+      state.tab = tab;
+      for (const t of el("tabs").children) {
+        t.setAttribute("aria-selected", String(t.dataset.tab === tab));
+      }
+      renderInspector();
+    }
+
+    async function renderInspector() {
+      const body = el("inspectorBody");
+      const toolbar = el("toolbar");
+      if (!state.obj) {
+        toolbar.hidden = true;
+        body.replaceChildren(Object.assign(document.createElement("p"), {
+          className: "empty",
+          textContent: "Select an object to read its state.",
+        }));
+        return;
+      }
+      if (state.tab === "storage") {
+        toolbar.hidden = false;
+        el("toolbarLabel").textContent = "per-object SQLite";
+        const entries = await api.storageList(state.ns, state.obj.id, {});
+        body.replaceChildren(state.view === "typed" ? typedTable(entries) : hexView(entries));
+      } else if (state.tab === "alarm") {
+        toolbar.hidden = true;
+        const at = await api.alarmGet(state.ns, state.obj.id);
+        body.replaceChildren(alarmView(at));
+      } else {
+        toolbar.hidden = true;
+        const logs = await api.logsTail({
+          namespace: state.ns,
+          objectId: state.obj.id,
+          limit: 200,
+        });
+        body.replaceChildren(logsView(logs));
+      }
+    }
+
+    function typeOf(v) {
+      if (v === null) return "null";
+      if (Array.isArray(v)) return "array";
+      return typeof v;
+    }
+
+    function typedTable(entries) {
+      if (!entries.length) {
+        return Object.assign(document.createElement("p"), {
+          className: "empty",
+          textContent: "No stored keys.",
+        });
+      }
+      const table = document.createElement("table");
+      table.className = "kv";
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Key</th><th>Value</th></tr>";
+      table.append(thead);
+      const tb = document.createElement("tbody");
+      for (const [k, v] of entries) {
+        const tr = document.createElement("tr");
+        const tdK = document.createElement("td");
+        tdK.className = "k";
+        tdK.textContent = k;
+        const tdV = document.createElement("td");
+        tdV.className = "v";
+        const tag = document.createElement("span");
+        tag.className = "type-tag";
+        tag.textContent = typeOf(v);
+        const val = document.createElement("span");
+        val.textContent = typeof v === "string"
+          ? v
+          : JSON.stringify(v, null, typeOf(v) === "object" || typeOf(v) === "array" ? 2 : 0);
+        tdV.append(tag, val);
+        tr.append(tdK, tdV);
+        tb.append(tr);
+      }
+      table.append(tb);
+      return table;
+    }
+
+    function hexView(entries) {
+      // The "bytes people" fallback: dump the whole storage as canonical JSON, ResEdit-style.
+      const bytes = new TextEncoder().encode(JSON.stringify(Object.fromEntries(entries)));
+      const pre = document.createElement("pre");
+      pre.className = "hex";
+      const lines = [];
+      for (let i = 0; i < bytes.length; i += 16) {
+        const slice = bytes.subarray(i, i + 16);
+        const off = i.toString(16).padStart(6, "0");
+        const hex = [...slice].map((b) => b.toString(16).padStart(2, "0")).join(" ").padEnd(
+          16 * 3 - 1,
+          " ",
+        );
+        const asc = [...slice].map((b) => (b >= 32 && b < 127) ? String.fromCharCode(b) : "·")
+          .join("");
+        lines.push(
+          `<span class="off">${off}</span>  ${hex}  <span class="asc">${
+            escapeHtml(asc)
+          }</span>`,
+        );
+      }
+      pre.innerHTML = lines.join("\n") || '<span class="off">000000</span>  (empty)';
+      return pre;
+    }
+
+    function alarmView(at) {
+      const div = document.createElement("div");
+      div.className = "field";
+      if (at === null) {
+        div.innerHTML = "No alarm scheduled.";
+        return div;
+      }
+      const when = new Date(at).toISOString();
+      div.innerHTML = `Next wake at <b>${when}</b><br>epoch ms <b>${at}</b>`;
+      return div;
+    }
+
+    function logsView(logs) {
+      if (!logs.length) {
+        return Object.assign(document.createElement("p"), {
+          className: "empty",
+          textContent: "No log lines.",
+        });
+      }
+      const pre = document.createElement("pre");
+      pre.className = "hex";
+      pre.textContent = logs.map((l) =>
+        `${new Date(l.at).toISOString()}  ${l.level.toUpperCase().padEnd(5)}  ${l.message}`
+      ).join("\n");
+      return pre;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    }
+
+    // ── Wiring ──────────────────────────────────────────────────────
+    for (const t of el("tabs").children) {
+      t.addEventListener("click", () => setTab(t.dataset.tab));
+      t.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setTab(t.dataset.tab);
+        }
+      });
+    }
+    const setView = (v) => {
+      state.view = v;
+      el("viewTyped").setAttribute("aria-pressed", String(v === "typed"));
+      el("viewRaw").setAttribute("aria-pressed", String(v === "raw"));
+      renderInspector();
+    };
+    el("viewTyped").addEventListener("click", () => setView("typed"));
+    el("viewRaw").addEventListener("click", () => setView("raw"));
+
+    loadNamespaces();
+
+    // ── Fixture (standalone browser mode) ───────────────────────────
+    function fixtureApi() {
+      const seed = {
+        version: "0.0.0",
+        engine: "fixture",
+        namespaces: [
+          {
+            name: "research",
+            objects: [
+              {
+                id: "agent-milvus",
+                name: "ResearchAgent",
+                alarm: 4102444800000,
+                storage: {
+                  "cfg:topic": "on-device open-weights inference",
+                  "cfg:model": "HuggingFaceTB/SmolLM2-360M-Instruct",
+                  "findings": [
+                    {
+                      at: 1786200000000,
+                      summary: "Xet-backed downloads cut cold-pull time.",
+                    },
+                    {
+                      at: 1786203600000,
+                      summary: "workerd oracle caught 3 alarm-spec bugs.",
+                    },
+                  ],
+                  "run:count": 42,
+                },
+              },
+              {
+                id: "agent-triage",
+                name: "TriageAgent",
+                alarm: null,
+                storage: { "seen": 7, "queue": [] },
+              },
+            ],
+          },
+          {
+            name: "family",
+            objects: [
+              {
+                id: "chore-board",
+                name: "ChoreBoard",
+                alarm: 4102531200000,
+                storage: { "owner": "mattt@", "tasks": ["dishes", "trash"] },
+              },
+            ],
+          },
+        ],
+      };
+      const find = (ns, id) =>
+        seed.namespaces.find((n) => n.name === ns)?.objects.find((o) => o.id === id);
+      const sortPairs = (obj) => Object.keys(obj).sort().map((k) => [k, obj[k]]);
+      return {
+        status: () =>
+          Promise.resolve({ version: seed.version, engine: seed.engine, uptimeMs: 0 }),
+        namespaces: () =>
+          Promise.resolve(
+            seed.namespaces.map((n) => ({ name: n.name, objectCount: n.objects.length })),
+          ),
+        objects: (ns) =>
+          Promise.resolve(
+            (seed.namespaces.find((n) => n.name === ns)?.objects ?? []).map((o) => ({
+              id: o.id,
+              name: o.name,
+              namespace: ns,
+              hasAlarm: o.alarm != null,
+            })),
+          ),
+        storageList: (ns, id, opts = {}) => {
+          let pairs = sortPairs(find(ns, id)?.storage ?? {});
+          if (opts.prefix) pairs = pairs.filter(([k]) => k.startsWith(opts.prefix));
+          if (opts.limit != null) pairs = pairs.slice(0, opts.limit);
+          return Promise.resolve(pairs);
+        },
+        storageGet: (ns, id, key) => {
+          const s = find(ns, id)?.storage ?? {};
+          return Promise.resolve(key in s ? s[key] : null);
+        },
+        alarmGet: (ns, id) => Promise.resolve(find(ns, id)?.alarm ?? null),
+        logsTail: () =>
+          Promise.resolve([
+            { at: 1786203600000, level: "info", message: "alarm fired; running retrieval" },
+            { at: 1786203601200, level: "info", message: "env.AI: 214 tokens via deno-mlx" },
+            { at: 1786203602000, level: "info", message: "wrote findings to granted folder" },
+          ]),
+      };
+    }
+    </script>
+  </body>
+</html>
