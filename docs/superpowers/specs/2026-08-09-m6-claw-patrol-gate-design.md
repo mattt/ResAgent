@@ -100,10 +100,13 @@ resagent.hcl  ──parse──▶  Manifest { deployment, gate: GatePolicy }
 
 ### Components (new `src/gate/`, mirroring `src/conformance/` + `src/manifest/`)
 
-- **`src/gate/rules.ts`** — the typed gate policy model: `GatePolicy { endpoints, credentials, rules }`,
-  `GateRule { name, endpoints, priority, disabled, condition, credential?, verdict, reason }`,
-  `Verdict = "allow"|"deny"|"approve"|"passthrough"`, `Endpoint`, `CredentialDecl`. Engine-neutral —
-  no Claw Patrol types leak in.
+- **`src/gate/policy.ts`** — the compiled, engine-neutral policy: `Policy { endpoints, credentials,
+  rules }`, `CompiledRule { name, endpoint, priority, condition?, credential?, verdict, reason }`,
+  `Verdict = "allow"|"deny"|"approve"|"passthrough"`, `Endpoint`, `Credential`. No Claw Patrol or
+  manifest types leak in.
+- **`src/gate/compile.ts`** — `compileGates(Manifest): Policy`: each `gate` target → an `https`
+  endpoint per allow-proto/hosts + an allow rule (with credential + optional condition) + a
+  `priority=-100` default-deny when `deny_default`. The one place manifest shape meets gate shape.
 - **`src/gate/facts.ts`** — `ActionFacts` (the neutral request shape: `host`, `credential?`, `peer_ip?`,
   and one facet `http`/`sql`/`k8s`/`ssh`), matching the fixture `action` vocabulary so a fact set
   serializes straight to a clawpatrol fixture.
@@ -139,15 +142,25 @@ resagent.hcl  ──parse──▶  Manifest { deployment, gate: GatePolicy }
 - **`src/gate/runner.ts`** — the diff runner: run each case through a `GateController`, compare to
   `expect`, report first divergence with expected/actual (mirrors `src/conformance/runner.ts`).
 
-### C4 extension (`src/manifest`)
+### C4 extension (`src/manifest`) — extend the existing grammar, don't reinvent it
 
-- `src/manifest/parse.ts` gains `gate { … }` and `credential { … }` block handling, producing a
-  `GatePolicy` sub-model alongside the existing deployment model (`Manifest = { deployment, gate }`).
-  One grammar, one parser, one file (`resagent.hcl`).
-- `src/manifest/validate.ts` gains strict schemas for the new blocks (key allow-lists, verdict enum,
-  host/condition types), with the same dotted-path errors.
-- `examples/research-agent/resagent.hcl` gains a `gate` stanza: an allowlisted API host, a
-  method/path deny rule, and a credential placeholder — the reference example for C4 + the demo.
+**Already present** (discovered this session): the manifest grammar parses and strictly validates
+`gate "<target>" { allow "<proto>" { hosts=[…] } approver=… deny_default=bool }` into
+`Manifest.gates: GateRule[]` (`src/manifest/{types,parse,validate}.ts`), and the example
+`resagent.hcl` already carries a `gate "research/ResearchAgent"` stanza. So M6 **extends** it minimally:
+
+- **`types.ts`** — add `Credential` (name, type, header?, prefix?, username?, placeholder, keychain)
+  and `Manifest.credentials: Credential[]`; add optional `condition?` and `credential?` to `AllowRule`.
+- **`parse.ts`** — parse a top-level `credential "<name>" { type header prefix keychain placeholder }`
+  block and the two new `allow` fields.
+- **`validate.ts`** — add `validateCredential` (key allow-list + `type` enum
+  `bearer_token|header_token|basic_auth`) and widen the `allow` allow-list with `condition`/`credential`
+  (and register `credential` at the root allow-list).
+- **`examples/research-agent/resagent.hcl`** — add a `credential "hf"` block, bind it on the allow
+  rule, and add one `condition` (e.g. `http.method == "GET"`) to exercise the CEL path.
+
+`src/gate` **consumes** this typed model (`compile.ts`: `Manifest → Policy`) rather than re-parsing —
+one grammar, one parser, as C4 requires.
 
 ### C5 extension (`src/protocol`, `src/shell`)
 
