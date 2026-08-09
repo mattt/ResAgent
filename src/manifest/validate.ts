@@ -198,7 +198,14 @@ function validateGate(path: string, body: Json, out: ManifestIssue[]): void {
 }
 
 function validateCredential(path: string, body: Json, out: ManifestIssue[]): void {
-  unknownKeys(path, body, ["type", "header", "prefix", "username", "placeholder", "keychain"], out);
+  unknownKeys(path, body, [
+    "type",
+    "header",
+    "prefix",
+    "username",
+    "placeholder",
+    "keychain",
+  ], out);
   checkEnum(path, body, "type", ["bearer_token", "header_token", "basic_auth"], out);
   checkString(path, body, "header", out);
   checkString(path, body, "prefix", out);

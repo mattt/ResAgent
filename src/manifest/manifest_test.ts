@@ -65,7 +65,9 @@ Deno.test("rejects a credential with an unknown type and a missing keychain", as
       placeholder = "X"
     }
   `);
-  assert(issues.some((i) => i.path === "credential.bad.type" && i.message.includes("one of")));
+  assert(
+    issues.some((i) => i.path === "credential.bad.type" && i.message.includes("one of")),
+  );
   assert(
     issues.some((i) => i.path === "credential.bad.keychain" && i.message === "required"),
   );
