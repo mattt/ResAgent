@@ -9,8 +9,9 @@
     "conformance:celld": "deno run --allow-read --allow-write --allow-env --allow-run --allow-net --allow-sys src/conformance/run.ts celld",
     "lint:objects": "deno run --allow-read src/lint/object_lint.ts",
     "shell": "deno desktop src/shell/main.ts",
-    "test": "deno test --allow-read --allow-env src/",
-    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts src/conformance/run.ts src/conformance/op_executor.ts src/lint/object_lint.ts src/protocol/codec.ts src/protocol/server.ts src/protocol/memory_backend.ts src/protocol/client.ts src/shell/main.ts examples/research-agent/index.ts",
+    "daemon": "deno run --allow-read --allow-write --allow-net --allow-env src/daemon/main.ts",
+    "test": "deno test --allow-read --allow-write --allow-net --allow-env src/",
+    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts src/conformance/run.ts src/conformance/op_executor.ts src/lint/object_lint.ts src/protocol/codec.ts src/protocol/server.ts src/protocol/memory_backend.ts src/protocol/client.ts src/shell/main.ts src/daemon/main.ts examples/research-agent/index.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

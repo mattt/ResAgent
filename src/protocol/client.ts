@@ -55,6 +55,8 @@ export class ProtocolClient {
           if (line.length > 0) this.#onFrame(line);
         }
       }
+    } catch {
+      // The connection was torn down mid-read — expected on close; pending calls fail below.
     } finally {
       this.#failAll(new Error("connection closed"));
     }
