@@ -22,7 +22,7 @@ const policy: Policy = {
       verdict: "allow",
       reason: "read-only Hub",
     },
-    { name: "deny-default", priority: -100, verdict: "deny", reason: "default deny" },
+    { name: "hf-deny", endpoint: "hf", priority: -100, verdict: "deny", reason: "default deny" },
   ],
 };
 
@@ -41,19 +41,19 @@ Deno.test("reference: allowed host + condition → allow, injects the credential
   assertEquals(r.credential, "hf");
 });
 
-Deno.test("reference: allowed host but condition fails → falls through to default deny", async () => {
+Deno.test("reference: allowed host but condition fails → per-endpoint catch-all deny", async () => {
   const g = await gate();
   const r = await g.evaluate({ host: "huggingface.co", http: { method: "POST", path: "/api" } });
   assertEquals(r.verdict, "deny");
-  assertEquals(r.rule, "deny-default");
+  assertEquals(r.rule, "hf-deny");
   assertEquals(r.credential, undefined);
 });
 
-Deno.test("reference: disallowed host → global default deny", async () => {
+Deno.test("reference: disallowed host → no rule matches, deny-closed", async () => {
   const g = await gate();
   const r = await g.evaluate({ host: "evil.example.com", http: { method: "GET", path: "/" } });
   assertEquals(r.verdict, "deny");
-  assertEquals(r.rule, "deny-default");
+  assert(r.reason?.includes("no matching rule"));
 });
 
 Deno.test("reference: host glob matches a subdomain", async () => {

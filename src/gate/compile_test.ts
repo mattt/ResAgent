@@ -25,7 +25,7 @@ Deno.test("compile: the example manifest lowers to a policy", async () => {
 
   const deny = policy.rules.find((r) => r.verdict === "deny");
   assert(deny);
-  assertEquals(deny!.endpoint, undefined); // global
+  assertEquals(deny!.endpoint, ep.name); // per-endpoint catch-all (Claw Patrol has no global rule)
   assertEquals(deny!.priority, -100);
 
   // The credential is carried through for injection.
