@@ -9,6 +9,7 @@
 import type { DaemonBackend, LogsTailOptions, StorageListOptions } from "./server.ts";
 import type {
   DaemonStatus,
+  GateRuleInfo,
   Json,
   LogLine,
   NamespaceInfo,
@@ -34,6 +35,7 @@ export interface MemorySeed {
   uptimeMs?: number;
   namespaces: MemoryNamespace[];
   logs?: LogLine[];
+  gate?: GateRuleInfo[];
 }
 
 export function memoryBackend(seed: MemorySeed): DaemonBackend {
@@ -100,6 +102,10 @@ export function memoryBackend(seed: MemorySeed): DaemonBackend {
       }
       if (opts.limit !== undefined) logs = logs.slice(-opts.limit);
       return logs;
+    },
+
+    gateRules(): GateRuleInfo[] {
+      return seed.gate ?? [];
     },
   };
 }

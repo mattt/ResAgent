@@ -40,7 +40,8 @@ export type Request =
     id: number;
     method: "logs.tail";
     params: { namespace?: string; objectId?: string; limit?: number };
-  };
+  }
+  | { id: number; method: "gate.rules"; params: Record<string, never> };
 
 export type Method = Request["method"];
 
@@ -52,6 +53,7 @@ export const METHODS: readonly Method[] = [
   "storage.get",
   "alarms.get",
   "logs.tail",
+  "gate.rules",
 ] as const;
 
 // ── Result payloads (by method) ──────────────────────────────────────────────
@@ -85,6 +87,26 @@ export interface LogLine {
   message: string;
 }
 
+/**
+ * One egress-gate rule, flattened for the inspector's typed gate view (M6). Engine-neutral and
+ * self-contained — the compiled gate policy lowered to a display row, read through the same C5 read
+ * surface as storage and alarms so the inspector works against either engine.
+ */
+export interface GateRuleInfo {
+  name: string;
+  /** Host globs the rule's endpoint claims (empty for a global rule). */
+  hosts: string[];
+  /** Typed endpoint reference, e.g. `https.hf` (absent for a global rule). */
+  endpoint?: string;
+  /** CEL-subset condition, if any. */
+  condition?: string;
+  verdict: "allow" | "deny" | "approve" | "passthrough";
+  /** Credential injected on an allow, if any. */
+  credential?: string;
+  priority: number;
+  reason?: string;
+}
+
 export interface ResultByMethod {
   "status": DaemonStatus;
   "namespaces.list": NamespaceInfo[];
@@ -93,6 +115,7 @@ export interface ResultByMethod {
   "storage.get": Json;
   "alarms.get": number | null;
   "logs.tail": LogLine[];
+  "gate.rules": GateRuleInfo[];
 }
 
 // ── Responses ────────────────────────────────────────────────────────────────

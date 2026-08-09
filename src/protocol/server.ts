@@ -11,6 +11,7 @@
 import { decode, encode, ProtocolError } from "./codec.ts";
 import type {
   DaemonStatus,
+  GateRuleInfo,
   Json,
   LogLine,
   NamespaceInfo,
@@ -44,6 +45,8 @@ export interface DaemonBackend {
   storageGet(namespace: string, objectId: string, key: string): Promise<Json> | Json;
   alarmGet(namespace: string, objectId: string): Promise<number | null> | (number | null);
   logsTail(opts: LogsTailOptions): Promise<LogLine[]> | LogLine[];
+  /** The compiled egress-gate rules (M6). Optional — engines without a gate return none. */
+  gateRules?(): Promise<GateRuleInfo[]> | GateRuleInfo[];
 }
 
 async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> {
@@ -73,6 +76,8 @@ async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> 
         objectId: req.params.objectId,
         limit: req.params.limit,
       });
+    case "gate.rules":
+      return backend.gateRules ? await backend.gateRules() : [];
   }
 }
 

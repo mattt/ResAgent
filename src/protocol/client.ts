@@ -10,6 +10,7 @@
 import { decode, encode } from "./codec.ts";
 import type {
   DaemonStatus,
+  GateRuleInfo,
   Json,
   LogLine,
   NamespaceInfo,
@@ -118,6 +119,9 @@ export class ProtocolClient {
   }
   logsTail(opts: LogsTailOptions = {}): Promise<LogLine[]> {
     return this.#call("logs.tail", { ...opts });
+  }
+  gateRules(): Promise<GateRuleInfo[]> {
+    return this.#call("gate.rules", {});
   }
 
   async close(): Promise<void> {
