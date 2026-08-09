@@ -38,10 +38,23 @@ namespace "research" {
 gate "research/ResearchAgent" {
   allow "https" {
     hosts = ["huggingface.co", "*.hf.co"]
+    # Only read traffic to the Hub, and inject the Hub token at the wire (from Keychain).
+    condition  = "http.method == \"GET\""
+    credential = "hf"
   }
   # Borderline requests escalate to the on-device open-weights judge (spec 3).
   approver = "local-judge"
   deny_default = true
+}
+
+# The Hub token the gate injects. The object sends the placeholder; the gate swaps in the real
+# secret read from the macOS Keychain service below. The value is never in this file or the object.
+credential "hf" {
+  type        = "header_token"
+  header      = "Authorization"
+  prefix      = "Bearer "
+  placeholder = "RESAGENT_HF_TOKEN"
+  keychain    = "resagent.gate.hf"
 }
 
 # ── Tailnet identity (Tailscale serve) — phase two ─────────────────────────────

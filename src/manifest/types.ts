@@ -10,6 +10,8 @@ export interface Manifest {
   namespaces: Namespace[];
   /** Egress gate rules (Claw Patrol) — not part of the deploy. */
   gates: GateRule[];
+  /** Wire credentials injected by the gate from Keychain — not part of the deploy. */
+  credentials: Credential[];
   /** Tailnet serve/identity rules (Tailscale) — not part of the deploy. */
   serves: ServeRule[];
 }
@@ -56,6 +58,30 @@ export interface GateRule {
 export interface AllowRule {
   protocol: string;
   hosts: string[];
+  /** Optional CEL-subset condition, e.g. `http.method == "GET"`. Absent = match any request. */
+  condition?: string;
+  /** Name of a top-level {@link Credential} the gate injects at the wire for matching requests. */
+  credential?: string;
+}
+
+/**
+ * A wire credential the gate holds and injects, so the object never carries the secret. The real
+ * value is read from the macOS Keychain (`keychain`) at policy-apply time; the object sends
+ * `placeholder`, and the gate swaps in the secret. Types mirror Claw Patrol's credential kinds.
+ */
+export interface Credential {
+  name: string;
+  type: "bearer_token" | "header_token" | "basic_auth";
+  /** Header name for `header_token` (e.g. "Authorization"). */
+  header?: string;
+  /** Value prefix for `header_token` (e.g. "Bearer "). */
+  prefix?: string;
+  /** Username for `basic_auth`. */
+  username?: string;
+  /** Placeholder the object sends in place of the real secret. */
+  placeholder: string;
+  /** macOS Keychain service the real secret is read from (e.g. "resagent.gate.hf"). */
+  keychain: string;
 }
 
 export interface ServeRule {

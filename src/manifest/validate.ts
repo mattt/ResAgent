@@ -150,9 +150,10 @@ export function validateRaw(root: unknown): ManifestIssue[] {
     out.push({ path: "", message: "manifest must be a set of blocks" });
     return out;
   }
-  unknownKeys("", r, ["namespace", "gate", "serve"], out);
+  unknownKeys("", r, ["namespace", "gate", "credential", "serve"], out);
   eachLabeled(r.namespace, "namespace", out, validateNamespace);
   eachLabeled(r.gate, "gate", out, validateGate);
+  eachLabeled(r.credential, "credential", out, validateCredential);
   eachLabeled(r.serve, "serve", out, validateServe);
   return out;
 }
@@ -189,9 +190,21 @@ function validateGate(path: string, body: Json, out: ManifestIssue[]): void {
   checkString(path, body, "approver", out);
   checkBool(path, body, "deny_default", out);
   eachLabeled(body.allow, `${path}.allow`, out, (p, ab) => {
-    unknownKeys(p, ab, ["hosts"], out);
+    unknownKeys(p, ab, ["hosts", "condition", "credential"], out);
     checkStringArray(p, ab, "hosts", out, true);
+    checkString(p, ab, "condition", out);
+    checkString(p, ab, "credential", out);
   });
+}
+
+function validateCredential(path: string, body: Json, out: ManifestIssue[]): void {
+  unknownKeys(path, body, ["type", "header", "prefix", "username", "placeholder", "keychain"], out);
+  checkEnum(path, body, "type", ["bearer_token", "header_token", "basic_auth"], out);
+  checkString(path, body, "header", out);
+  checkString(path, body, "prefix", out);
+  checkString(path, body, "username", out);
+  checkString(path, body, "placeholder", out, true);
+  checkString(path, body, "keychain", out, true);
 }
 
 function validateServe(path: string, body: Json, out: ManifestIssue[]): void {

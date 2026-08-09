@@ -42,6 +42,33 @@ Deno.test("parses the manifest into the typed model", async () => {
   assertEquals(m.serves[0].pattern, "research/*");
   assertEquals(m.serves[0].funnel, false);
   assert(m.serves[0].tailnetUsers.includes("mattt@"));
+
+  // Gate allow rules carry the optional condition + credential (C4 → M6).
+  assertEquals(m.gates[0].allow[0].condition, 'http.method == "GET"');
+  assertEquals(m.gates[0].allow[0].credential, "hf");
+
+  // The credential block parses; the real secret lives in Keychain, not here.
+  assertEquals(m.credentials.length, 1);
+  const cred = m.credentials[0];
+  assertEquals(cred.name, "hf");
+  assertEquals(cred.type, "header_token");
+  assertEquals(cred.header, "Authorization");
+  assertEquals(cred.prefix, "Bearer ");
+  assertEquals(cred.placeholder, "RESAGENT_HF_TOKEN");
+  assertEquals(cred.keychain, "resagent.gate.hf");
+});
+
+Deno.test("rejects a credential with an unknown type and a missing keychain", async () => {
+  const issues = await validateFile(`
+    credential "bad" {
+      type        = "sorcery"
+      placeholder = "X"
+    }
+  `);
+  assert(issues.some((i) => i.path === "credential.bad.type" && i.message.includes("one of")));
+  assert(
+    issues.some((i) => i.path === "credential.bad.keychain" && i.message === "required"),
+  );
 });
 
 Deno.test("lowers to a valid wrangler.toml (round-tripped)", async () => {
@@ -82,6 +109,7 @@ Deno.test("rejects a namespace whose objects disagree on entrypoint", () => {
       ],
     }],
     gates: [],
+    credentials: [],
     serves: [],
   };
   assertThrows(() => toWrangler(m), Error, "share one entrypoint");

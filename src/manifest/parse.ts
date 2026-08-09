@@ -12,6 +12,7 @@ import { ManifestError, validateRaw } from "./validate.ts";
 import type {
   AiBinding,
   AllowRule,
+  Credential,
   DurableObjectDecl,
   FolderBinding,
   GateRule,
@@ -39,6 +40,7 @@ export async function parseManifest(
   return {
     namespaces: parseNamespaces(root.namespace),
     gates: parseGates(root.gate),
+    credentials: parseCredentials(root.credential),
     serves: parseServes(root.serve),
   };
 }
@@ -124,7 +126,34 @@ function parseAllow(node: unknown): AllowRule[] {
   if (!map) return [];
   const out: AllowRule[] = [];
   for (const [protocol, val] of Object.entries(map)) {
-    for (const body of bodies(val)) out.push({ protocol, hosts: strArray(body.hosts) });
+    for (const body of bodies(val)) {
+      out.push({
+        protocol,
+        hosts: strArray(body.hosts),
+        condition: body.condition != null ? str(body.condition) : undefined,
+        credential: body.credential != null ? str(body.credential) : undefined,
+      });
+    }
+  }
+  return out;
+}
+
+function parseCredentials(node: unknown): Credential[] {
+  const map = obj(node);
+  if (!map) return [];
+  const out: Credential[] = [];
+  for (const [name, val] of Object.entries(map)) {
+    for (const body of bodies(val)) {
+      out.push({
+        name,
+        type: str(body.type, "bearer_token") as Credential["type"],
+        header: body.header != null ? str(body.header) : undefined,
+        prefix: body.prefix != null ? str(body.prefix) : undefined,
+        username: body.username != null ? str(body.username) : undefined,
+        placeholder: str(body.placeholder),
+        keychain: str(body.keychain),
+      });
+    }
   }
   return out;
 }
