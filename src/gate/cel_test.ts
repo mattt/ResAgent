@@ -2,7 +2,11 @@ import { assert, assertEquals, assertThrows } from "jsr:@std/assert@^1";
 import { checkCondition, evaluateCondition } from "./cel.ts";
 import type { ActionFacts } from "./facts.ts";
 
-const http = (method: string, path: string, extra: Partial<ActionFacts["http"]> = {}): ActionFacts => ({
+const http = (
+  method: string,
+  path: string,
+  extra: Partial<ActionFacts["http"]> = {},
+): ActionFacts => ({
   host: "example.com",
   http: { method, path, ...extra },
 });
@@ -31,7 +35,12 @@ Deno.test("cel: boolean composition and precedence", () => {
   assert(evaluateCondition('http.method == "GET" || http.path == "/admin"', f));
   assert(evaluateCondition('!(http.method == "GET")', f));
   // && binds tighter than ||: false && false || true  ⇒ true
-  assert(evaluateCondition('http.method == "GET" && http.path == "/x" || http.path == "/admin"', f));
+  assert(
+    evaluateCondition(
+      'http.method == "GET" && http.path == "/x" || http.path == "/admin"',
+      f,
+    ),
+  );
 });
 
 Deno.test("cel: header lookup is case-insensitive", () => {
@@ -40,18 +49,26 @@ Deno.test("cel: header lookup is case-insensitive", () => {
 });
 
 Deno.test("cel: body_json access", () => {
-  const f = http("POST", "/", { body: JSON.stringify({ action: "drop", nested: { k: "v" } }) });
+  const f = http("POST", "/", {
+    body: JSON.stringify({ action: "drop", nested: { k: "v" } }),
+  });
   assert(evaluateCondition('http.body_json.action == "drop"', f));
   assert(evaluateCondition('http.body_json.nested.k == "v"', f));
 });
 
 Deno.test("cel: sql and k8s facets", () => {
-  const sql: ActionFacts = { host: "db", sql: { statement: "DROP TABLE users", verb: "DROP", tables: ["users"] } };
+  const sql: ActionFacts = {
+    host: "db",
+    sql: { statement: "DROP TABLE users", verb: "DROP", tables: ["users"] },
+  };
   assert(evaluateCondition('sql.verb == "DROP"', sql));
   assert(evaluateCondition('sql.tables.contains("users")', sql));
   assert(!evaluateCondition('sql.tables.contains("orders")', sql));
 
-  const k8s: ActionFacts = { host: "k", k8s: { verb: "delete", resource: "secrets", namespace: "prod" } };
+  const k8s: ActionFacts = {
+    host: "k",
+    k8s: { verb: "delete", resource: "secrets", namespace: "prod" },
+  };
   assert(evaluateCondition('k8s.resource == "secrets"', k8s));
   assert(evaluateCondition('k8s.verb == "delete" && k8s.namespace == "prod"', k8s));
 });
@@ -62,7 +79,7 @@ Deno.test("cel: missing selectors read as empty string", () => {
 });
 
 Deno.test("cel: syntax errors are rejected", () => {
-  assertThrows(() => evaluateCondition('http.method =', http("GET", "/")));
+  assertThrows(() => evaluateCondition("http.method =", http("GET", "/")));
   assertThrows(() => evaluateCondition('http.method == "GET" &&', http("GET", "/")));
   assertThrows(() => evaluateCondition('(http.method == "GET"', http("GET", "/")));
 });

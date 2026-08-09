@@ -22,7 +22,13 @@ const policy: Policy = {
       verdict: "allow",
       reason: "read-only Hub",
     },
-    { name: "hf-deny", endpoint: "hf", priority: -100, verdict: "deny", reason: "default deny" },
+    {
+      name: "hf-deny",
+      endpoint: "hf",
+      priority: -100,
+      verdict: "deny",
+      reason: "default deny",
+    },
   ],
 };
 
@@ -34,7 +40,10 @@ async function gate(): Promise<ReferenceGate> {
 
 Deno.test("reference: allowed host + condition → allow, injects the credential", async () => {
   const g = await gate();
-  const r = await g.evaluate({ host: "huggingface.co", http: { method: "GET", path: "/api" } });
+  const r = await g.evaluate({
+    host: "huggingface.co",
+    http: { method: "GET", path: "/api" },
+  });
   assertEquals(r.verdict, "allow");
   assertEquals(r.rule, "hf-allow");
   assertEquals(r.endpoint, "https.hf");
@@ -43,7 +52,10 @@ Deno.test("reference: allowed host + condition → allow, injects the credential
 
 Deno.test("reference: allowed host but condition fails → per-endpoint catch-all deny", async () => {
   const g = await gate();
-  const r = await g.evaluate({ host: "huggingface.co", http: { method: "POST", path: "/api" } });
+  const r = await g.evaluate({
+    host: "huggingface.co",
+    http: { method: "POST", path: "/api" },
+  });
   assertEquals(r.verdict, "deny");
   assertEquals(r.rule, "hf-deny");
   assertEquals(r.credential, undefined);
@@ -51,7 +63,10 @@ Deno.test("reference: allowed host but condition fails → per-endpoint catch-al
 
 Deno.test("reference: disallowed host → no rule matches, deny-closed", async () => {
   const g = await gate();
-  const r = await g.evaluate({ host: "evil.example.com", http: { method: "GET", path: "/" } });
+  const r = await g.evaluate({
+    host: "evil.example.com",
+    http: { method: "GET", path: "/" },
+  });
   assertEquals(r.verdict, "deny");
   assert(r.reason?.includes("no matching rule"));
 });
@@ -69,11 +84,26 @@ Deno.test("reference: higher priority rule wins over a lower one", async () => {
     endpoints: [{ name: "ep", type: "https", hosts: ["api.example.com"] }],
     credentials: [],
     rules: [
-      { name: "low-allow", endpoint: "ep", priority: 0, verdict: "allow", reason: "allow" },
-      { name: "high-deny", endpoint: "ep", priority: 10, verdict: "deny", reason: "block" },
+      {
+        name: "low-allow",
+        endpoint: "ep",
+        priority: 0,
+        verdict: "allow",
+        reason: "allow",
+      },
+      {
+        name: "high-deny",
+        endpoint: "ep",
+        priority: 10,
+        verdict: "deny",
+        reason: "block",
+      },
     ],
   });
-  const r = await g.evaluate({ host: "api.example.com", http: { method: "GET", path: "/" } });
+  const r = await g.evaluate({
+    host: "api.example.com",
+    http: { method: "GET", path: "/" },
+  });
   assertEquals(r.verdict, "deny");
   assertEquals(r.rule, "high-deny");
 });

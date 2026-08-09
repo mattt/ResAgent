@@ -41,10 +41,16 @@ Deno.test("compile: the compiled example is enforceable by the reference gate", 
   const g = new ReferenceGate();
   await g.applyPolicy(policy);
 
-  const allowed = await g.evaluate({ host: "huggingface.co", http: { method: "GET", path: "/api/models" } });
+  const allowed = await g.evaluate({
+    host: "huggingface.co",
+    http: { method: "GET", path: "/api/models" },
+  });
   assertEquals(allowed.verdict, "allow");
   assertEquals(allowed.credential, "hf");
 
-  const blocked = await g.evaluate({ host: "pastebin.com", http: { method: "POST", path: "/" } });
+  const blocked = await g.evaluate({
+    host: "pastebin.com",
+    http: { method: "POST", path: "/" },
+  });
   assertEquals(blocked.verdict, "deny");
 });

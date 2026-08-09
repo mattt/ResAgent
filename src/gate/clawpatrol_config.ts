@@ -49,7 +49,9 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
   if (opts.wireguard) {
     gw.push("  wireguard {");
     gw.push(`    subnet_cidr = ${q(opts.wireguard.subnetCidr)}`);
-    if (opts.wireguard.endpoint) gw.push(`    endpoint    = ${q(opts.wireguard.endpoint)}`);
+    if (opts.wireguard.endpoint) {
+      gw.push(`    endpoint    = ${q(opts.wireguard.endpoint)}`);
+    }
     gw.push("  }");
   }
   out.push("gateway {", ...gw, "}", "");
@@ -66,7 +68,9 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
     for (const cred of policy.credentials) {
       const bound = [
         ...new Set(
-          policy.rules.filter((r) => r.credential === cred.name && r.endpoint).map((r) => r.endpoint!),
+          policy.rules.filter((r) => r.credential === cred.name && r.endpoint).map((r) =>
+            r.endpoint!
+          ),
         ),
       ];
       const body: string[] = [];
@@ -74,7 +78,9 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
       if (cred.prefix) body.push(`  prefix = ${q(cred.prefix)}`);
       if (cred.username) body.push(`  username = ${q(cred.username)}`);
       if (bound.length === 1) body.push(`  endpoint = ${refOf(bound[0])}`);
-      else if (bound.length > 1) body.push(`  endpoints = [${bound.map(refOf).join(", ")}]`);
+      else if (bound.length > 1) {
+        body.push(`  endpoints = [${bound.map(refOf).join(", ")}]`);
+      }
       out.push(`credential ${q(cred.type)} ${q(cred.name)} {`, ...body, "}", "");
     }
   }

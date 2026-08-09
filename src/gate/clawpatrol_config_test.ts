@@ -22,12 +22,21 @@ const policy: Policy = {
       verdict: "allow",
       reason: "read-only Hub",
     },
-    { name: "hf-deny", endpoint: "hf", priority: -100, verdict: "deny", reason: "default deny" },
+    {
+      name: "hf-deny",
+      endpoint: "hf",
+      priority: -100,
+      verdict: "deny",
+      reason: "default deny",
+    },
   ],
 };
 
 Deno.test("clawpatrol_config: golden output", () => {
-  const cfg = toClawPatrolConfig(policy, { stateDir: "/tmp/s", dashboardListen: "127.0.0.1:8080" });
+  const cfg = toClawPatrolConfig(policy, {
+    stateDir: "/tmp/s",
+    dashboardListen: "127.0.0.1:8080",
+  });
   assertEquals(
     cfg,
     `schema_version = 1

@@ -44,13 +44,21 @@ function tokenize(src: string): Tok[] {
   let i = 0;
   while (i < src.length) {
     const c = src[i];
-    if (c === " " || c === "\t" || c === "\n" || c === "\r") { i++; continue; }
+    if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+      i++;
+      continue;
+    }
     if (c === '"' || c === "'") {
       let s = "";
       i++;
       while (i < src.length && src[i] !== c) {
-        if (src[i] === "\\" && i + 1 < src.length) { s += src[i + 1]; i += 2; }
-        else { s += src[i]; i++; }
+        if (src[i] === "\\" && i + 1 < src.length) {
+          s += src[i + 1];
+          i += 2;
+        } else {
+          s += src[i];
+          i++;
+        }
       }
       if (src[i] !== c) throw new CelError("unterminated string literal");
       i++;
@@ -70,7 +78,10 @@ function tokenize(src: string): Tok[] {
     }
     if (/[A-Za-z_]/.test(c)) {
       let s = "";
-      while (i < src.length && /[A-Za-z0-9_]/.test(src[i])) { s += src[i]; i++; }
+      while (i < src.length && /[A-Za-z0-9_]/.test(src[i])) {
+        s += src[i];
+        i++;
+      }
       toks.push({ k: "id", v: s });
       continue;
     }
@@ -177,8 +188,10 @@ class Parser {
       this.#eat(); // "."
       const next = this.#eat();
       if (next.k !== "id") throw new CelError("expected identifier after '.'");
-      if (METHODS.has(next.v) && this.#peek()?.k === "op" &&
-        (this.#peek() as { v: string }).v === "(") {
+      if (
+        METHODS.has(next.v) && this.#peek()?.k === "op" &&
+        (this.#peek() as { v: string }).v === "("
+      ) {
         this.#expectOp("(");
         const arg = this.#eat();
         if (arg.k !== "str") throw new CelError(`${next.v}() takes a string argument`);
@@ -200,9 +213,7 @@ class Parser {
 function callMethod(method: string, target: Value, arg: string): boolean {
   if (method === "startsWith") return asStrings(target).some((s) => s.startsWith(arg));
   if (method === "contains") {
-    return Array.isArray(target)
-      ? target.includes(arg)
-      : String(target).includes(arg);
+    return Array.isArray(target) ? target.includes(arg) : String(target).includes(arg);
   }
   if (method === "matches") {
     const re = new RegExp(arg);
@@ -237,7 +248,9 @@ function resolveSelector(path: string[], facts: ActionFacts): Value {
       try {
         let node: unknown = JSON.parse(h.body ?? "null");
         for (const seg of rest.slice(1)) {
-          node = node && typeof node === "object" ? (node as Record<string, unknown>)[seg] : undefined;
+          node = node && typeof node === "object"
+            ? (node as Record<string, unknown>)[seg]
+            : undefined;
         }
         return node == null ? "" : String(node);
       } catch {
