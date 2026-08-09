@@ -12,6 +12,7 @@
 
 import { createDaemon, type DaemonBackend, serveConn } from "../protocol/server.ts";
 import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
+import { celldBackend } from "./celld_backend.ts";
 
 export interface RunningDaemon {
   path: string;
@@ -90,12 +91,25 @@ if (import.meta.main) {
     () => {},
   );
 
-  const daemon = serveUnix(path, memoryBackend(DEV_SEED));
+  // RESAGENT_ENGINE=celld boots a real celld (MinIO + deploy + node) and serves live objects;
+  // otherwise the in-memory dev backend.
+  let backend: DaemonBackend;
+  let closeBackend: () => Promise<void> = () => Promise.resolve();
+  if (Deno.env.get("RESAGENT_ENGINE") === "celld") {
+    console.info("starting celld backend (MinIO + celld deploy + node)…");
+    const handle = await celldBackend();
+    backend = handle.backend;
+    closeBackend = handle.close;
+  } else {
+    backend = memoryBackend(DEV_SEED);
+  }
+
+  const daemon = serveUnix(path, backend);
   console.info(`ResAgent daemon listening on ${path}`);
 
   const shutdown = () => {
     console.info("\nshutting down…");
-    daemon.close().finally(() => Deno.exit(0));
+    daemon.close().then(closeBackend).finally(() => Deno.exit(0));
   };
   Deno.addSignalListener("SIGINT", shutdown);
   Deno.addSignalListener("SIGTERM", shutdown);

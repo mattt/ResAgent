@@ -447,20 +447,48 @@
     // In the Deno Desktop shell the daemon is exposed via the `bindings` global (win.bind); in a
     // plain browser we fall back to a built-in fixture. window.__RESAGENT_API__ is an explicit
     // override for tests/embeds.
-    const bridge = globalThis.bindings;
-    const LIVE = Boolean(window.__RESAGENT_API__ || bridge);
-    const api = window.__RESAGENT_API__ ?? (bridge ? bindingsApi(bridge) : fixtureApi());
+    let api;
+    let live = false;
 
-    function bindingsApi(b) {
-      return {
-        status: () => b.status(),
-        namespaces: () => b.namespaces(),
-        objects: (ns) => b.objects(ns),
-        storageList: (ns, id, opts = {}) => b.storageList(ns, id, opts),
-        storageGet: (ns, id, key) => b.storageGet(ns, id, key),
-        alarmGet: (ns, id) => b.alarmGet(ns, id),
-        logsTail: (opts = {}) => b.logsTail(opts),
+    // When served by the shell, the daemon is reachable at POST /rpc (the shell proxies to the C5
+    // socket). Each method sends { method, args } and gets back { ok, result }.
+    function httpApi() {
+      const call = async (method, args) => {
+        const res = await fetch("/rpc", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ method, args }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || `rpc ${res.status}`);
+        return data.result;
       };
+      return {
+        status: () => call("status", []),
+        namespaces: () => call("namespaces", []),
+        objects: (ns) => call("objects", [ns]),
+        storageList: (ns, id, opts = {}) => call("storageList", [ns, id, opts]),
+        storageGet: (ns, id, key) => call("storageGet", [ns, id, key]),
+        alarmGet: (ns, id) => call("alarmGet", [ns, id]),
+        logsTail: (opts = {}) => call("logsTail", [opts]),
+      };
+    }
+
+    // Prefer an injected API (tests), then the shell's /rpc endpoint, then the standalone fixture
+    // (when opened as a plain file, /rpc isn't there).
+    async function resolveApi() {
+      if (window.__RESAGENT_API__) {
+        live = true;
+        return window.__RESAGENT_API__;
+      }
+      try {
+        const http = httpApi();
+        await http.status();
+        live = true;
+        return http;
+      } catch {
+        return fixtureApi();
+      }
     }
 
     const state = { ns: null, obj: null, tab: "storage", view: "typed" };
@@ -509,7 +537,7 @@
     async function loadNamespaces() {
       const st = await api.status();
       el("stEngine").textContent = `engine ${st.engine} · v${st.version}`;
-      el("stSrc").textContent = LIVE ? "● live daemon" : "○ fixture data";
+      el("stSrc").textContent = live ? "● live daemon" : "○ fixture data";
       const list = await api.namespaces();
       el("nsCount").textContent = String(list.length);
       const box = el("nsList");
@@ -719,7 +747,24 @@
     el("viewTyped").addEventListener("click", () => setView("typed"));
     el("viewRaw").addEventListener("click", () => setView("raw"));
 
-    loadNamespaces();
+    function showFatal(e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      el("stEngine").textContent = "engine error";
+      el("inspectorBody").replaceChildren(Object.assign(document.createElement("p"), {
+        className: "empty",
+        textContent: "Cannot reach the daemon: " + msg,
+      }));
+    }
+
+    async function boot() {
+      api = await resolveApi();
+      try {
+        await loadNamespaces();
+      } catch (e) {
+        showFatal(e);
+      }
+    }
+    boot();
 
     // ── Fixture (standalone browser mode) ───────────────────────────
     function fixtureApi() {

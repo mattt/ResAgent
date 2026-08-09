@@ -1,17 +1,19 @@
 /**
  * ResAgent shell — the Deno Desktop control plane (M3).
  *
- * Serves the inspector UI (inspector.html) and bridges the C5 protocol into it: each read method is
- * exposed to the web page via `win.bind(...)`, callable as `bindings.<name>()`. The page prefers
- * those bindings, falling back to a fixture when opened in a plain browser.
+ * Serves the inspector UI (inspector.html) and proxies the C5 protocol to it over HTTP: the page
+ * POSTs { method, args } to /rpc and the shell forwards to its backend. (An earlier attempt used the
+ * Deno Desktop `win.bind` bridge, but the callbacks weren't reliably reaching the webview; plain
+ * fetch is robust and testable in any browser.)
  *
  * Backend: connects to a running daemon over a Unix socket when RESAGENT_SOCKET is set (the "app is
  * a viewer over a launchd service" posture), otherwise runs an in-process in-memory backend for
- * development. Run with a display: `deno desktop src/shell/main.ts` (Deno 2.9+). This entrypoint
- * uses desktop-only globals (Deno.BrowserWindow, Deno.Tray) via a typed shim so it still
- * type-checks under plain `deno check`.
+ * development. Run with a display: `deno task shell` (Deno 2.9+). This entrypoint uses desktop-only
+ * globals (Deno.BrowserWindow, Deno.Tray) via a typed shim so it still type-checks under plain
+ * `deno check`.
  */
 
+import inspectorHtml from "./inspector.html" with { type: "text" };
 import { ProtocolClient } from "../protocol/client.ts";
 import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
 import type { LogsTailOptions, StorageListOptions } from "../protocol/server.ts";
@@ -83,7 +85,13 @@ const DEV_SEED: MemorySeed = {
 };
 
 async function resolveApi(): Promise<ShellApi> {
-  const socket = Deno.env.get("RESAGENT_SOCKET");
+  // Env access is optional: without --allow-env (or the var), fall back to the in-memory backend.
+  let socket: string | undefined;
+  try {
+    socket = Deno.env.get("RESAGENT_SOCKET");
+  } catch {
+    socket = undefined;
+  }
   if (socket) {
     const conn = await Deno.connect({ path: socket, transport: "unix" });
     return new ProtocolClient(conn);
@@ -95,22 +103,36 @@ if (import.meta.main) {
   const api = await resolveApi();
   const apiRecord = api as unknown as Record<string, (...args: unknown[]) => unknown>;
 
-  const html = await Deno.readTextFile(new URL("./inspector.html", import.meta.url));
-  const server = Deno.serve({ port: 0, hostname: "127.0.0.1" }, (req) => {
+  // The page reaches the daemon through this HTTP server (POST /rpc), not the native bridge —
+  // standard fetch is reliable in the webview and testable in a plain browser. Only the read
+  // methods in `allowed` are callable.
+  const allowed = new Set<string>(BOUND_METHODS);
+  const server = Deno.serve({ port: 0, hostname: "127.0.0.1" }, async (req) => {
     const { pathname } = new URL(req.url);
     if (pathname === "/" || pathname === "/inspector.html") {
-      return new Response(html, {
+      return new Response(inspectorHtml, {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
+    }
+    if (req.method === "POST" && pathname === "/rpc") {
+      try {
+        const { method, args } = await req.json() as { method: string; args?: unknown[] };
+        if (!allowed.has(method)) {
+          return Response.json({ ok: false, error: `unknown method: ${method}` }, {
+            status: 400,
+          });
+        }
+        const result = await apiRecord[method](...(args ?? []));
+        return Response.json({ ok: true, result });
+      } catch (e) {
+        return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });
+      }
     }
     return new Response("not found", { status: 404 });
   });
   const url = `http://127.0.0.1:${server.addr.port}/`;
 
   const win = new desktop.BrowserWindow({ title: "ResAgent", width: 980, height: 660 });
-  for (const name of BOUND_METHODS) {
-    win.bind(name, (...args: unknown[]) => apiRecord[name](...args));
-  }
   win.navigate(url);
 
   const tray = new desktop.Tray();

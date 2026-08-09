@@ -16,3 +16,7 @@ deno.lock.local
 .env
 .env.*
 !.env.example
+
+# Deno Desktop build artifacts
+*.app
+*.dylib
