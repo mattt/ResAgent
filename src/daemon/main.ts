@@ -22,6 +22,8 @@ import type { Policy } from "../gate/policy.ts";
 import { GateLog, loggingGate, toGateLogEntries } from "../gate/log.ts";
 import { ReferenceGate } from "../gate/reference.ts";
 import { corpus } from "../gate/corpus.ts";
+import type { ServeRule } from "../manifest/types.ts";
+import { celldForward, type ForwardFn, serveIngress } from "../serve/ingress.ts";
 
 export interface RunningDaemon {
   path: string;
@@ -112,6 +114,54 @@ function withGate(backend: DaemonBackend, gate: GateSurface): DaemonBackend {
   };
 }
 
+/** The manifest's tailnet serve rules (M8), for the identity-gated ingress. Degrades to none. */
+async function loadServes(): Promise<ServeRule[]> {
+  const path = Deno.env.get("RESAGENT_MANIFEST") ??
+    "examples/research-agent/resagent.hcl";
+  try {
+    return (await parseManifest(await Deno.readTextFile(path))).serves;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Start the tailnet ingress (M8) when RESAGENT_INGRESS=host:port is set — an HTTP listener that gates
+ * inbound object access by tailnet identity. Off by default. RESAGENT_INGRESS_NODE points forwarding
+ * at a celld node; without it, forwarding is a stub that echoes the routed target (the identity
+ * gating is the point). RESAGENT_INGRESS_ALLOW_LOCAL=1 lets identity-less loopback calls through.
+ */
+function startIngress(serves: ServeRule[]): { close(): Promise<void> } | null {
+  const addr = Deno.env.get("RESAGENT_INGRESS");
+  if (!addr) return null;
+  const [hostname, portStr] = addr.split(":");
+  const port = Number(portStr);
+  const node = Deno.env.get("RESAGENT_INGRESS_NODE");
+  const forward: ForwardFn = node ? celldForward(node) : (target) =>
+    Promise.resolve(
+      Response.json({
+        routed: target,
+        note: "set RESAGENT_INGRESS_NODE to reach a celld node",
+      }),
+    );
+  const server = Deno.serve(
+    { hostname, port },
+    serveIngress({
+      serves,
+      forward,
+      allowLocal: Deno.env.get("RESAGENT_INGRESS_ALLOW_LOCAL") === "1",
+      log: (e) =>
+        console.info(
+          `ingress ${e.allowed ? "ALLOW" : "DENY"} ${e.target} ${
+            e.login ?? "(local)"
+          } — ${e.reason}`,
+        ),
+    }),
+  );
+  console.info(`ResAgent tailnet ingress on ${addr}`);
+  return { close: () => server.shutdown() };
+}
+
 function defaultSocketPath(): string {
   const explicit = Deno.env.get("RESAGENT_SOCKET");
   if (explicit) return explicit;
@@ -161,9 +211,15 @@ if (import.meta.main) {
   const daemon = serveUnix(path, backend);
   console.info(`ResAgent daemon listening on ${path}`);
 
+  // Optional tailnet ingress (M8) — identity-gated inbound access, off unless RESAGENT_INGRESS is set.
+  const ingress = startIngress(await loadServes());
+
   const shutdown = () => {
     console.info("\nshutting down…");
-    daemon.close().then(closeBackend).finally(() => Deno.exit(0));
+    Promise.resolve(ingress?.close())
+      .then(() => daemon.close())
+      .then(closeBackend)
+      .finally(() => Deno.exit(0));
   };
   Deno.addSignalListener("SIGINT", shutdown);
   Deno.addSignalListener("SIGTERM", shutdown);
