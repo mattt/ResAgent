@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent for the ResAgent daemon (M3) — the always-on C5 service the shell views.
+  A LaunchAgent (not a LaunchDaemon) so it runs in the user session with TCC attribution and
+  Keychain access (the gate injects credentials from Keychain). "The app is a viewer over a
+  service": this keeps serving objects/alarms/gate over the Unix socket when the shell quits.
+  Depends on dev.resagent.celld being up (RESAGENT_ENGINE=celld serves live objects).
+  Installed by scripts/bootstrap.sh, which substitutes __RESAGENT_HOME__.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.resagent.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__RESAGENT_HOME__/scripts/run-daemon.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>StandardOutPath</key>
+  <string>__RESAGENT_HOME__/run/logs/daemon.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__RESAGENT_HOME__/run/logs/daemon.err.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>

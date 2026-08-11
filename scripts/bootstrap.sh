@@ -49,7 +49,7 @@ log "Fetching default model via @huggingface/hub (Xet): $DEFAULT_MODEL"
 # ── 5. Install + (re)load the LaunchAgents ────────────────────────────────────
 mkdir -p "$LAUNCH_AGENTS"
 chmod +x "$RESAGENT_HOME"/scripts/run-*.sh
-for label in dev.resagent.minio dev.resagent.celld; do
+for label in dev.resagent.minio dev.resagent.celld dev.resagent.daemon; do
   log "Installing LaunchAgent $label"
   sed "s#__RESAGENT_HOME__#$RESAGENT_HOME#g" \
     "$RESAGENT_HOME/launchd/$label.plist" > "$LAUNCH_AGENTS/$label.plist"
