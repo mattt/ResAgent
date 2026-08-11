@@ -50,6 +50,9 @@ export class ReferenceGate implements GateController {
       if (rule.verdict === "allow" && rule.credential) {
         result.credential = rule.credential;
       }
+      if (rule.verdict === "approve" && rule.approvers?.length) {
+        result.approvers = rule.approvers;
+      }
       return Promise.resolve(result);
     }
 

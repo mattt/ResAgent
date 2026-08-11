@@ -150,10 +150,11 @@ export function validateRaw(root: unknown): ManifestIssue[] {
     out.push({ path: "", message: "manifest must be a set of blocks" });
     return out;
   }
-  unknownKeys("", r, ["namespace", "gate", "credential", "serve"], out);
+  unknownKeys("", r, ["namespace", "gate", "credential", "approver", "serve"], out);
   eachLabeled(r.namespace, "namespace", out, validateNamespace);
   eachLabeled(r.gate, "gate", out, validateGate);
   eachLabeled(r.credential, "credential", out, validateCredential);
+  eachLabeled(r.approver, "approver", out, validateApprover);
   eachLabeled(r.serve, "serve", out, validateServe);
   return out;
 }
@@ -186,7 +187,7 @@ function validateObject(path: string, body: Json, out: ManifestIssue[]): void {
 }
 
 function validateGate(path: string, body: Json, out: ManifestIssue[]): void {
-  unknownKeys(path, body, ["allow", "approver", "deny_default"], out);
+  unknownKeys(path, body, ["allow", "approve", "approver", "deny_default"], out);
   checkString(path, body, "approver", out);
   checkBool(path, body, "deny_default", out);
   eachLabeled(body.allow, `${path}.allow`, out, (p, ab) => {
@@ -195,6 +196,20 @@ function validateGate(path: string, body: Json, out: ManifestIssue[]): void {
     checkString(p, ab, "condition", out);
     checkString(p, ab, "credential", out);
   });
+  eachLabeled(body.approve, `${path}.approve`, out, (p, ab) => {
+    unknownKeys(p, ab, ["hosts", "condition"], out);
+    checkStringArray(p, ab, "hosts", out, true);
+    checkString(p, ab, "condition", out);
+  });
+}
+
+function validateApprover(path: string, body: Json, out: ManifestIssue[]): void {
+  unknownKeys(path, body, ["type", "model", "endpoint", "prompt", "allow_when"], out);
+  checkEnum(path, body, "type", ["llm_approver", "rule_based"], out);
+  checkString(path, body, "model", out);
+  checkString(path, body, "endpoint", out);
+  checkString(path, body, "prompt", out);
+  checkString(path, body, "allow_when", out);
 }
 
 function validateCredential(path: string, body: Json, out: ManifestIssue[]): void {

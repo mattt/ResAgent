@@ -112,6 +112,7 @@ Deno.test("rejects a namespace whose objects disagree on entrypoint", () => {
     }],
     gates: [],
     credentials: [],
+    approvers: [],
     serves: [],
   };
   assertThrows(() => toWrangler(m), Error, "share one entrypoint");

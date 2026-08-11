@@ -12,6 +12,8 @@ import { ManifestError, validateRaw } from "./validate.ts";
 import type {
   AiBinding,
   AllowRule,
+  Approver,
+  ApproveRule,
   Credential,
   DurableObjectDecl,
   FolderBinding,
@@ -41,6 +43,7 @@ export async function parseManifest(
     namespaces: parseNamespaces(root.namespace),
     gates: parseGates(root.gate),
     credentials: parseCredentials(root.credential),
+    approvers: parseApprovers(root.approver),
     serves: parseServes(root.serve),
   };
 }
@@ -115,6 +118,7 @@ function parseGates(node: unknown): GateRule[] {
         approver: body.approver != null ? str(body.approver) : undefined,
         denyDefault: body.deny_default === true,
         allow: parseAllow(body.allow),
+        approve: parseApprove(body.approve),
       });
     }
   }
@@ -132,6 +136,41 @@ function parseAllow(node: unknown): AllowRule[] {
         hosts: strArray(body.hosts),
         condition: body.condition != null ? str(body.condition) : undefined,
         credential: body.credential != null ? str(body.credential) : undefined,
+      });
+    }
+  }
+  return out;
+}
+
+function parseApprove(node: unknown): ApproveRule[] {
+  const map = obj(node);
+  if (!map) return [];
+  const out: ApproveRule[] = [];
+  for (const [protocol, val] of Object.entries(map)) {
+    for (const body of bodies(val)) {
+      out.push({
+        protocol,
+        hosts: strArray(body.hosts),
+        condition: body.condition != null ? str(body.condition) : undefined,
+      });
+    }
+  }
+  return out;
+}
+
+function parseApprovers(node: unknown): Approver[] {
+  const map = obj(node);
+  if (!map) return [];
+  const out: Approver[] = [];
+  for (const [name, val] of Object.entries(map)) {
+    for (const body of bodies(val)) {
+      out.push({
+        name,
+        type: str(body.type, "rule_based") as Approver["type"],
+        model: body.model != null ? str(body.model) : undefined,
+        endpoint: body.endpoint != null ? str(body.endpoint) : undefined,
+        prompt: body.prompt != null ? str(body.prompt) : undefined,
+        allowWhen: body.allow_when != null ? str(body.allow_when) : undefined,
       });
     }
   }

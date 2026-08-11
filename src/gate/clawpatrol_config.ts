@@ -29,6 +29,9 @@ export interface ConfigOptions {
   unknownHost?: "deny" | "allow" | "passthrough";
   /** Emit credential blocks (they bind injection). Off for pure verdict replay, which ignores them. */
   includeCredentials?: boolean;
+  /** Emit approver blocks + `approve` refs on rules (M7). Default on; re-verify field names with a
+   * local `clawpatrol validate` (the binary isn't in CI). */
+  includeApprovers?: boolean;
 }
 
 const q = (s: string): string => JSON.stringify(s);
@@ -85,12 +88,21 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
     }
   }
 
+  if (opts.includeApprovers !== false) {
+    for (const a of policy.approvers ?? []) {
+      out.push(`approver ${q(a.type)} ${q(a.name)} {}`, "");
+    }
+  }
+
   for (const rule of policy.rules) {
     const body: string[] = [];
     if (rule.endpoint) body.push(`  endpoint = ${refOf(rule.endpoint)}`);
     if (rule.priority !== 0) body.push(`  priority = ${rule.priority}`);
     if (rule.condition) body.push(`  condition = ${q(rule.condition)}`);
     body.push(`  verdict = ${q(rule.verdict)}`);
+    if (opts.includeApprovers !== false && rule.approvers?.length) {
+      body.push(`  approve = [${rule.approvers.map(q).join(", ")}]`);
+    }
     if (rule.reason) body.push(`  reason = ${q(rule.reason)}`);
     out.push(`rule ${q(rule.name)} {`, ...body, "}", "");
   }

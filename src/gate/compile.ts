@@ -11,22 +11,58 @@
  *    "deny" }` (emitted by the config lowerer) and by the reference gate's deny-closed fallback
  *    (no rule matches → deny). Both ends agree on every case; the gate corpus proves it.
  *
- * `approver` is preserved in the manifest but intentionally not lowered: verdict chains with the
- * on-device judge are M7, so M6 emits allow/deny only.
+ * `approve` blocks lower to `approve` verdict rules at priority -50 — between allow (0) and deny
+ * (-100) — carrying the gate's `approver`, which the resolver ({@link "./approver.ts"}) runs above
+ * the gate. `ReferenceGate` still emits the static `approve` verdict Claw Patrol fixtures compare.
+ * Cross-references (an `approver`/`credential` a gate names must exist) are checked here and thrown.
  */
 
+import type {
+  ApproverSpec,
+  CompiledRule,
+  Credential,
+  Endpoint,
+  Policy,
+} from "./policy.ts";
 import type { Manifest } from "../manifest/types.ts";
-import type { CompiledRule, Credential, Endpoint, Policy } from "./policy.ts";
 
 /** Make a name safe for Claw Patrol's flat, globally-unique namespace. */
 function slug(s: string): string {
   return s.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+/** Reject a gate that names an approver or credential no top-level block defines. */
+function checkReferences(manifest: Manifest): void {
+  const approverNames = new Set(manifest.approvers.map((a) => a.name));
+  const credentialNames = new Set(manifest.credentials.map((c) => c.name));
+  for (const gate of manifest.gates) {
+    if (gate.approver && !approverNames.has(gate.approver)) {
+      throw new Error(
+        `gate "${gate.target}": unknown approver "${gate.approver}" (no matching approver block)`,
+      );
+    }
+    for (const allow of gate.allow) {
+      if (allow.credential && !credentialNames.has(allow.credential)) {
+        throw new Error(
+          `gate "${gate.target}": unknown credential "${allow.credential}" (no matching credential block)`,
+        );
+      }
+    }
+    if (gate.approve.length > 0 && !gate.approver) {
+      throw new Error(
+        `gate "${gate.target}": has approve rules but no approver to resolve them`,
+      );
+    }
+  }
+}
+
 export function compileGates(manifest: Manifest): Policy {
+  checkReferences(manifest);
+
   const endpoints: Endpoint[] = [];
   const rules: CompiledRule[] = [];
   const credentials: Credential[] = manifest.credentials.map((c) => ({ ...c }));
+  const approvers: ApproverSpec[] = manifest.approvers.map((a) => ({ ...a }));
 
   for (const gate of manifest.gates) {
     const base = slug(gate.target);
@@ -52,7 +88,25 @@ export function compileGates(manifest: Manifest): Policy {
         });
       }
     });
+
+    // Escalation rules sit between allow (0) and the default deny (-100): a matching request that
+    // isn't a plain allow becomes `approve`, resolved through the gate's approver above the gate.
+    gate.approve.forEach((appr, i) => {
+      const epName = gate.approve.length > 1 ? `${base}-approve-${i}` : `${base}-approve`;
+      endpoints.push({ name: epName, type: "https", hosts: appr.hosts });
+      rules.push({
+        name: `${epName}`,
+        endpoint: epName,
+        priority: -50,
+        condition: appr.condition,
+        approvers: gate.approver ? [gate.approver] : undefined,
+        verdict: "approve",
+        reason: `escalate ${appr.protocol} to ${
+          appr.hosts.join(", ")
+        } → approver ${gate.approver}`,
+      });
+    });
   }
 
-  return { endpoints, credentials, rules };
+  return { endpoints, credentials, rules, approvers };
 }

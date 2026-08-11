@@ -35,10 +35,30 @@ export interface Credential {
 }
 
 /**
+ * A verdict-chain approver the gate escalates an `approve` verdict to (M7). `rule_based` decides
+ * deterministically from a CEL `allowWhen`; `llm_approver` asks an on-device OpenAI-compatible model
+ * (contract C3). Static gate verdicts stay allow/deny/approve; resolving an `approve` to a final
+ * allow/deny is a layer above the gate ({@link "./approver.ts".resolveVerdict}).
+ */
+export interface ApproverSpec {
+  name: string;
+  type: "llm_approver" | "rule_based";
+  /** Model id for `llm_approver` (contract C3). */
+  model?: string;
+  /** OpenAI-compatible endpoint for `llm_approver`, e.g. `http://127.0.0.1:8788`. */
+  endpoint?: string;
+  /** System prompt for `llm_approver`. */
+  prompt?: string;
+  /** CEL-subset condition for `rule_based`; holds ⇒ allow, else deny. */
+  allowWhen?: string;
+}
+
+/**
  * One policy decision. Higher `priority` runs first; ties keep compiled order. `endpoint` names the
  * target whose hosts must match (absent = matches any host — a global rule, e.g. default-deny).
  * `condition` is a CEL-subset expression ({@link "./cel.ts"}); absent = matches any request.
- * `credential` is injected only when the rule fires with an `allow` verdict.
+ * `credential` is injected only when the rule fires with an `allow` verdict. `approvers` names the
+ * verdict-chain approvers an `approve` verdict escalates to (AND-chain, deny-closed — M7).
  */
 export interface CompiledRule {
   name: string;
@@ -46,6 +66,7 @@ export interface CompiledRule {
   priority: number;
   condition?: string;
   credential?: string;
+  approvers?: string[];
   verdict: Verdict;
   reason: string;
 }
@@ -54,6 +75,8 @@ export interface Policy {
   endpoints: Endpoint[];
   credentials: Credential[];
   rules: CompiledRule[];
+  /** Verdict-chain approvers referenced by `approve` rules (M7). Optional; absent = none. */
+  approvers?: ApproverSpec[];
 }
 
 /** Look up an endpoint by name. */

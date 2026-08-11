@@ -88,17 +88,20 @@ async function main(): Promise<void> {
   // ── ③ allowed host, disallowed method: blocked by rule ──────────────────────
   const blockedMethod: ActionFacts = {
     host: "huggingface.co",
-    http: { method: "POST", path: "/api/models" },
+    http: { method: "DELETE", path: "/api/models" },
   };
   const v3 = await gate.evaluate(blockedMethod);
   console.log(
-    `③ object → POST https://huggingface.co/api/models   (write to an allowed host)`,
+    `③ object → DELETE https://huggingface.co/api/models   (a write method no rule allows)`,
   );
   line("gate verdict:", `${v3.verdict.toUpperCase()}  (rule ${v3.rule})`);
-  console.log(`   BLOCK egress ${target} → huggingface.co POST /api/models\n`);
+  console.log(`   BLOCK egress ${target} → huggingface.co DELETE /api/models\n`);
 
   console.log(
     "verdicts above are the reference gate's; `deno task gate:clawpatrol` proves real Claw Patrol agrees.",
+  );
+  console.log(
+    "a Hub write (POST) escalates to the approver instead — see `deno task gate:approve`.",
   );
 
   if (seeded && cred) await deleteSecret(cred.keychain);

@@ -18,6 +18,8 @@ export interface VerdictResult {
   reason?: string;
   /** Credential the gate would inject at the wire (allow verdicts only). */
   credential?: string;
+  /** Approvers an `approve` verdict escalates to, in chain order (M7). */
+  approvers?: string[];
 }
 
 export interface GateController {

@@ -35,6 +35,13 @@ const policy: Policy = {
     placeholder: "RESAGENT_HF_TOKEN",
     keychain: "resagent.gate.hf",
   }],
+  // A deterministic judge (M7): a Hub write under /api/ escalates and is approved; anything else it
+  // sees is denied. Rule-based so `gate:reference` resolves the chain CI-green.
+  approvers: [{
+    name: "judge",
+    type: "rule_based",
+    allowWhen: 'http.path.startsWith("/api/")',
+  }],
   rules: [
     // Hub: read-only, token injected.
     {
@@ -45,6 +52,16 @@ const policy: Policy = {
       credential: "hf",
       verdict: "allow",
       reason: "read-only Hub",
+    },
+    // A Hub write escalates to the judge instead of a hard deny (M7).
+    {
+      name: "hub-approve",
+      endpoint: "hub",
+      priority: -50,
+      condition: 'http.method == "POST"',
+      approvers: ["judge"],
+      verdict: "approve",
+      reason: "escalate Hub write to the judge",
     },
     {
       name: "hub-deny",
@@ -86,9 +103,9 @@ export const corpus: Corpus = {
       expect: "allow",
     },
     {
-      name: "hub POST is denied",
+      name: "hub POST escalates to the approver",
       facts: http("huggingface.co", "POST", "/api/models"),
-      expect: "deny",
+      expect: "approve",
     },
     {
       name: "hub wildcard host is allowed",

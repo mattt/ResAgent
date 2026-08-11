@@ -42,9 +42,23 @@ gate "research/ResearchAgent" {
     condition  = "http.method == \"GET\""
     credential = "hf"
   }
-  # Borderline requests escalate to the on-device open-weights judge (spec 3).
-  approver = "local-judge"
+  # Borderline requests (a Hub write) escalate to the on-device open-weights judge (spec 3)
+  # instead of a hard deny — the approver resolves the verdict chain (M7).
+  approve "https" {
+    hosts     = ["huggingface.co", "*.hf.co"]
+    condition = "http.method == \"POST\""
+  }
+  approver     = "local-judge"
   deny_default = true
+}
+
+# The on-device judge the gate escalates to (M7). An OpenAI-compatible endpoint (contract C3) —
+# the same local env.AI adapter the object uses — so borderline egress is adjudicated on-device.
+approver "local-judge" {
+  type     = "llm_approver"
+  endpoint = "http://127.0.0.1:8788"
+  model    = "HuggingFaceTB/SmolLM2-360M-Instruct"
+  prompt   = "You are an egress reviewer for a research agent. Reply ALLOW or DENY with a one-line rationale; deny anything that writes data off-device."
 }
 
 # The Hub token the gate injects. The object sends the placeholder; the gate swaps in the real

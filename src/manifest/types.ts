@@ -12,6 +12,8 @@ export interface Manifest {
   gates: GateRule[];
   /** Wire credentials injected by the gate from Keychain — not part of the deploy. */
   credentials: Credential[];
+  /** Verdict-chain approvers referenced by gates (on-device judge / rule-based) — M7. */
+  approvers: Approver[];
   /** Tailnet serve/identity rules (Tailscale) — not part of the deploy. */
   serves: ServeRule[];
 }
@@ -50,9 +52,12 @@ export interface FolderBinding {
 export interface GateRule {
   /** namespace/object this rule governs, e.g. "research/ResearchAgent". */
   target: string;
+  /** Name of a top-level {@link Approver} that `approve` escalations resolve through (M7). */
   approver?: string;
   denyDefault: boolean;
   allow: AllowRule[];
+  /** Escalation rules: matching requests get an `approve` verdict resolved by `approver` (M7). */
+  approve: ApproveRule[];
 }
 
 export interface AllowRule {
@@ -62,6 +67,30 @@ export interface AllowRule {
   condition?: string;
   /** Name of a top-level {@link Credential} the gate injects at the wire for matching requests. */
   credential?: string;
+}
+
+/**
+ * An escalation rule: requests to these hosts (optionally narrowed by `condition`) get an `approve`
+ * verdict instead of a hard deny, resolved through the gate's {@link Approver} (M7).
+ */
+export interface ApproveRule {
+  protocol: string;
+  hosts: string[];
+  condition?: string;
+}
+
+/**
+ * A verdict-chain approver (M7). `rule_based` decides from a CEL `allowWhen`; `llm_approver` asks an
+ * on-device OpenAI-compatible model (contract C3). The gate stays allow/deny/approve; resolving an
+ * `approve` to allow/deny happens above the gate.
+ */
+export interface Approver {
+  name: string;
+  type: "llm_approver" | "rule_based";
+  model?: string;
+  endpoint?: string;
+  prompt?: string;
+  allowWhen?: string;
 }
 
 /**
