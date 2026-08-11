@@ -19,6 +19,7 @@ import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
 import type { LogsTailOptions, StorageListOptions } from "../protocol/server.ts";
 import type {
   DaemonStatus,
+  GateRuleInfo,
   Json,
   LogLine,
   NamespaceInfo,
@@ -39,6 +40,9 @@ interface ShellApi {
   storageGet(ns: string, id: string, key: string): Promise<Json> | Json;
   alarmGet(ns: string, id: string): Promise<number | null> | (number | null);
   logsTail(opts: LogsTailOptions): Promise<LogLine[]> | LogLine[];
+  // Optional to match DaemonBackend (engines without a gate omit it); both the ProtocolClient and
+  // memoryBackend provide it at runtime, and the inspector's Gate tab tolerates its absence.
+  gateRules?(): Promise<GateRuleInfo[]> | GateRuleInfo[];
 }
 
 const BOUND_METHODS = [
@@ -49,6 +53,7 @@ const BOUND_METHODS = [
   "storageGet",
   "alarmGet",
   "logsTail",
+  "gateRules",
 ] as const;
 
 // ── Desktop API shim (typed so `deno check` passes without the desktop lib) ──
@@ -80,6 +85,28 @@ const DEV_SEED: MemorySeed = {
         alarm: 4102444800000,
         storage: { "cfg:topic": "on-device inference", "run:count": 3 },
       }],
+    },
+  ],
+  // The compiled example policy (compileGates → policyToGateRules), so the Gate tab shows rules
+  // even against the in-memory dev backend.
+  gate: [
+    {
+      name: "research-ResearchAgent-allow",
+      hosts: ["huggingface.co", "*.hf.co"],
+      endpoint: "https.research-ResearchAgent",
+      condition: 'http.method == "GET"',
+      verdict: "allow",
+      credential: "hf",
+      priority: 0,
+      reason: "allow https to huggingface.co, *.hf.co",
+    },
+    {
+      name: "research-ResearchAgent-deny",
+      hosts: ["huggingface.co", "*.hf.co"],
+      endpoint: "https.research-ResearchAgent",
+      verdict: "deny",
+      priority: -100,
+      reason: "default deny for research/ResearchAgent",
     },
   ],
 };

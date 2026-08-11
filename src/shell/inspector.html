@@ -316,6 +316,26 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    /* gate rules: deny rows carry the one accent */
+    table.gate td.mono {
+      font-family: var(--mono);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    table.gate td.wrap {
+      font-family: var(--mono);
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    tr.gate-deny td {
+      color: var(--alarm);
+    }
+    .verdict {
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 10px;
+    }
     .type-tag {
       display: inline-block;
       font-size: 9px;
@@ -421,6 +441,8 @@
               tabindex="0">Alarm</span>
             <span class="tab" role="tab" data-tab="logs" aria-selected="false"
               tabindex="0">Logs</span>
+            <span class="tab" role="tab" data-tab="gate" aria-selected="false"
+              tabindex="0">Gate</span>
           </div>
           <div class="inspector__toolbar" id="toolbar" hidden>
             <span id="toolbarLabel"></span>
@@ -471,6 +493,7 @@
         storageGet: (ns, id, key) => call("storageGet", [ns, id, key]),
         alarmGet: (ns, id) => call("alarmGet", [ns, id]),
         logsTail: (opts = {}) => call("logsTail", [opts]),
+        gateRules: () => call("gateRules", []),
       };
     }
 
@@ -603,6 +626,14 @@
     async function renderInspector() {
       const body = el("inspectorBody");
       const toolbar = el("toolbar");
+      // The Gate tab is policy-level: it renders the compiled egress rules even with no object
+      // selected (the gate governs objects; it isn't a per-object resource fork).
+      if (state.tab === "gate") {
+        toolbar.hidden = true;
+        const rows = await api.gateRules();
+        body.replaceChildren(gateView(rows));
+        return;
+      }
       if (!state.obj) {
         toolbar.hidden = true;
         body.replaceChildren(Object.assign(document.createElement("p"), {
@@ -722,6 +753,45 @@
         `${new Date(l.at).toISOString()}  ${l.level.toUpperCase().padEnd(5)}  ${l.message}`
       ).join("\n");
       return pre;
+    }
+
+    function gateView(rows) {
+      if (!rows || !rows.length) {
+        return Object.assign(document.createElement("p"), {
+          className: "empty",
+          textContent: "No egress-gate rules.",
+        });
+      }
+      const cell = (text, cls) => {
+        const td = document.createElement("td");
+        td.className = cls;
+        td.textContent = text;
+        return td;
+      };
+      const table = document.createElement("table");
+      table.className = "kv gate";
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Rule</th><th>Hosts</th><th>Condition</th><th>Verdict</th>" +
+        "<th>Credential</th><th>Pri</th></tr>";
+      table.append(thead);
+      const tb = document.createElement("tbody");
+      // Highest priority first, mirroring the reference gate's evaluation order.
+      const ordered = [...rows].sort((a, b) => b.priority - a.priority);
+      for (const r of ordered) {
+        const tr = document.createElement("tr");
+        if (r.verdict === "deny") tr.className = "gate-deny";
+        tr.append(
+          cell(r.name, "mono"),
+          cell((r.hosts || []).join(", ") || "—", "wrap"),
+          cell(r.condition || "—", "wrap"),
+          cell(r.verdict, "mono verdict"),
+          cell(r.credential || "—", "mono"),
+          cell(String(r.priority), "mono"),
+        );
+        tb.append(tr);
+      }
+      table.append(tb);
+      return table;
     }
 
     function escapeHtml(s) {
@@ -851,6 +921,27 @@
             { at: 1786203600000, level: "info", message: "alarm fired; running retrieval" },
             { at: 1786203601200, level: "info", message: "env.AI: 214 tokens via deno-mlx" },
             { at: 1786203602000, level: "info", message: "wrote findings to granted folder" },
+          ]),
+        gateRules: () =>
+          Promise.resolve([
+            {
+              name: "research-ResearchAgent-allow",
+              hosts: ["huggingface.co", "*.hf.co"],
+              endpoint: "https.research-ResearchAgent",
+              condition: 'http.method == "GET"',
+              verdict: "allow",
+              credential: "hf",
+              priority: 0,
+              reason: "allow https to huggingface.co, *.hf.co",
+            },
+            {
+              name: "research-ResearchAgent-deny",
+              hosts: ["huggingface.co", "*.hf.co"],
+              endpoint: "https.research-ResearchAgent",
+              verdict: "deny",
+              priority: -100,
+              reason: "default deny for research/ResearchAgent",
+            },
           ]),
       };
     }

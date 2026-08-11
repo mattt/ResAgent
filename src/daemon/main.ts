@@ -13,6 +13,10 @@
 import { createDaemon, type DaemonBackend, serveConn } from "../protocol/server.ts";
 import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
 import { celldBackend } from "./celld_backend.ts";
+import type { GateRuleInfo } from "../protocol/messages.ts";
+import { parseManifest } from "../manifest/parse.ts";
+import { compileGates } from "../gate/compile.ts";
+import { policyToGateRules } from "../gate/inspector.ts";
 
 export interface RunningDaemon {
   path: string;
@@ -61,6 +65,29 @@ export function serveUnix(path: string, backend: DaemonBackend): RunningDaemon {
   };
 }
 
+/**
+ * Load the egress-gate rules the daemon serves over C5 (`gate.rules`) from the C4 manifest at
+ * RESAGENT_MANIFEST (default the flagship example). The gate lives above the engine, so this wraps
+ * whichever backend rather than teaching celld_backend.ts about gates. A missing/invalid manifest
+ * degrades to no rules (a warning), never a failed boot.
+ */
+async function loadGateRules(): Promise<GateRuleInfo[]> {
+  const path = Deno.env.get("RESAGENT_MANIFEST") ??
+    "examples/research-agent/resagent.hcl";
+  try {
+    const policy = compileGates(await parseManifest(await Deno.readTextFile(path)));
+    return policyToGateRules(policy);
+  } catch (e) {
+    console.warn(`gate policy: could not load ${path}: ${(e as Error).message}`);
+    return [];
+  }
+}
+
+/** Add a `gate.rules` view to any backend without the backend knowing about gates. */
+function withGateRules(backend: DaemonBackend, rules: GateRuleInfo[]): DaemonBackend {
+  return { ...backend, gateRules: () => rules };
+}
+
 function defaultSocketPath(): string {
   const explicit = Deno.env.get("RESAGENT_SOCKET");
   if (explicit) return explicit;
@@ -103,6 +130,9 @@ if (import.meta.main) {
   } else {
     backend = memoryBackend(DEV_SEED);
   }
+
+  // The gate rides above the engine: serve the compiled manifest's rules over `gate.rules`.
+  backend = withGateRules(backend, await loadGateRules());
 
   const daemon = serveUnix(path, backend);
   console.info(`ResAgent daemon listening on ${path}`);
