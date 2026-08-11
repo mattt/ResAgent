@@ -16,16 +16,16 @@ import { celldEngine, type CelldOptions } from "../conformance/celld.ts";
 import type { EngineInstance } from "../conformance/engine.ts";
 import type { DaemonBackend } from "../protocol/server.ts";
 import type { Json, StorageEntries } from "../protocol/messages.ts";
+import { fileRegistry, type ObjectRegistry, type RegistryEntry } from "./registry.ts";
 
 export interface CelldBackendHandle {
   backend: DaemonBackend;
   close(): Promise<void>;
 }
 
-interface RegistryEntry {
-  namespace: string;
-  id: string;
-  name: string;
+export interface CelldBackendOptions extends CelldOptions {
+  /** Object-enumeration registry; defaults to a file registry seeded with the flagship object. */
+  registry?: ObjectRegistry;
 }
 
 const SEED_OBJECT: RegistryEntry = {
@@ -33,6 +33,11 @@ const SEED_OBJECT: RegistryEntry = {
   id: "ResearchAgent",
   name: "ResearchAgent",
 };
+
+function defaultRegistry(): ObjectRegistry {
+  const home = Deno.env.get("HOME") ?? ".";
+  return fileRegistry(`${home}/.resagent/registry.json`, [SEED_OBJECT]);
+}
 const SEED_STORAGE: Record<string, Json> = {
   "cfg:topic": "on-device open-weights inference",
   "cfg:model": "HuggingFaceTB/SmolLM2-360M-Instruct",
@@ -46,10 +51,18 @@ const SEED_STORAGE: Record<string, Json> = {
 /** Route an object to its celld cell by a stable, namespace-qualified name. */
 const cellId = (namespace: string, id: string) => `${namespace}/${id}`;
 
-export async function celldBackend(opts: CelldOptions = {}): Promise<CelldBackendHandle> {
+export async function celldBackend(
+  opts: CelldBackendOptions = {},
+): Promise<CelldBackendHandle> {
   const engine = celldEngine(opts);
   const instance: EngineInstance = await engine.create();
-  const registry: RegistryEntry[] = [SEED_OBJECT];
+  const registry = opts.registry ?? defaultRegistry();
+  registry.touch(SEED_OBJECT);
+
+  // Any object the daemon addresses becomes enumerable — the DO model has no list-instances, so we
+  // register on read. `id` doubles as the display name for objects discovered this way.
+  const seen = (namespace: string, id: string) =>
+    registry.touch({ namespace, id, name: id });
 
   // Seed one real object so the inspector opens onto live celld state.
   await instance.exec(cellId(SEED_OBJECT.namespace, SEED_OBJECT.id), {
@@ -60,30 +73,33 @@ export async function celldBackend(opts: CelldOptions = {}): Promise<CelldBacken
   const backend: DaemonBackend = {
     status: () => ({ version: "0.1.0", engine: "celld", uptimeMs: 0 }),
 
-    namespaces: () => {
-      const names = [...new Set(registry.map((r) => r.namespace))];
-      return names.map((name) => ({
-        name,
-        objectCount: registry.filter((r) => r.namespace === name).length,
-      }));
-    },
+    namespaces: () =>
+      registry.namespaces().map((n) => ({ name: n.name, objectCount: n.count })),
 
     objects: (namespace) =>
       registry
-        .filter((r) => r.namespace === namespace)
+        .byNamespace(namespace)
         .map((r) => ({ id: r.id, name: r.name, namespace, hasAlarm: false })),
 
-    storageList: async (namespace, id, opts) =>
-      await instance.exec(cellId(namespace, id), {
+    storageList: (namespace, id, opts) => {
+      seen(namespace, id);
+      return instance.exec(cellId(namespace, id), {
         kind: "list",
         options: { prefix: opts.prefix, limit: opts.limit },
-      }) as StorageEntries,
+      }) as Promise<StorageEntries>;
+    },
 
-    storageGet: async (namespace, id, key) =>
-      await instance.exec(cellId(namespace, id), { kind: "get", key }) as Json,
+    storageGet: (namespace, id, key) => {
+      seen(namespace, id);
+      return instance.exec(cellId(namespace, id), { kind: "get", key }) as Promise<Json>;
+    },
 
-    alarmGet: async (namespace, id) =>
-      await instance.exec(cellId(namespace, id), { kind: "getAlarm" }) as number | null,
+    alarmGet: (namespace, id) => {
+      seen(namespace, id);
+      return instance.exec(cellId(namespace, id), { kind: "getAlarm" }) as Promise<
+        number | null
+      >;
+    },
 
     logsTail: () => [],
   };
