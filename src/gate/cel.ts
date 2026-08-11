@@ -16,7 +16,8 @@
  *
  * Fact selectors: `http.method` `http.path` `http.query` `http.header.<name>` `http.body_json.<k>…`
  * `sql.statement` `sql.verb` `sql.tables` `k8s.verb` `k8s.resource` `k8s.namespace` `k8s.name`
- * `ssh.verb` `ssh.command`. Missing selectors read as the empty string (lists as empty).
+ * `ssh.verb` `ssh.command` `automation.kind` `automation.name` `automation.input`. Missing selectors
+ * read as the empty string (lists as empty).
  */
 
 import type { ActionFacts } from "./facts.ts";
@@ -269,6 +270,10 @@ function resolveSelector(path: string[], facts: ActionFacts): Value {
   }
   if (root === "ssh" && facts.ssh) {
     const v = (facts.ssh as unknown as Record<string, unknown>)[rest[0]];
+    return typeof v === "string" ? v : "";
+  }
+  if (root === "automation" && facts.automation) {
+    const v = (facts.automation as unknown as Record<string, unknown>)[rest[0]];
     return typeof v === "string" ? v : "";
   }
   return "";

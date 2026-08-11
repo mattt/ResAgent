@@ -10,6 +10,7 @@
 
 import { decode, encode, ProtocolError } from "./codec.ts";
 import type {
+  AutomationRunResult,
   DaemonStatus,
   GateLogEntry,
   GateRuleInfo,
@@ -37,6 +38,14 @@ export interface GateLogOptions {
   limit?: number;
 }
 
+export interface AutomationRunParams {
+  target: string;
+  kind: "shortcuts" | "osascript";
+  name?: string;
+  script?: string;
+  input?: string;
+}
+
 /** What a daemon must be able to answer. Any engine (Celld, Swift, in-memory) implements this. */
 export interface DaemonBackend {
   status(): Promise<DaemonStatus> | DaemonStatus;
@@ -54,6 +63,10 @@ export interface DaemonBackend {
   gateRules?(): Promise<GateRuleInfo[]> | GateRuleInfo[];
   /** The recent egress-gate verdict log (M6). Optional — absent returns none, like gateRules. */
   gateLog?(opts: GateLogOptions): Promise<GateLogEntry[]> | GateLogEntry[];
+  /** Run a gated Mac automation (M9) — the first mutating method. Absent ⇒ an error frame. */
+  automationRun?(
+    params: AutomationRunParams,
+  ): Promise<AutomationRunResult> | AutomationRunResult;
 }
 
 async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> {
@@ -87,6 +100,11 @@ async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> 
       return backend.gateRules ? await backend.gateRules() : [];
     case "gate.log":
       return backend.gateLog ? await backend.gateLog({ limit: req.params.limit }) : [];
+    case "automation.run":
+      if (!backend.automationRun) {
+        throw new Error("automation.run is not supported by this backend");
+      }
+      return await backend.automationRun(req.params);
   }
 }
 

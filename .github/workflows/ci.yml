@@ -52,3 +52,8 @@ jobs:
         run: deno task gate:reference
         # gate:validate / gate:clawpatrol need the clawpatrol binary and run locally,
         # mirroring conformance:celld (its engine isn't installed in CI either).
+
+      - name: M9 — live automation executor (osascript / shortcuts)
+        run: deno task test:automation
+        # macos-latest has /usr/bin/osascript + /usr/bin/shortcuts; drop this step if the
+        # runner ever objects (osascript is non-interactive, `shortcuts list` is read-only).

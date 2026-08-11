@@ -9,12 +9,18 @@ Deno.test("compile: the example manifest lowers to a policy", async () => {
   const m = await parseManifest(example);
   const policy = compileGates(m);
 
-  // Two endpoints: the allow host-group and the approve host-group (M7 escalation).
-  assertEquals(policy.endpoints.length, 2);
-  const allowEp = policy.endpoints[0];
+  // Three endpoints: the https allow group, the automation group (M9), and the approve group (M7).
+  assertEquals(policy.endpoints.length, 3);
+  const allowEp = policy.endpoints.find((e) => e.name === "research-ResearchAgent")!;
   assertEquals(allowEp.type, "https");
   assert(allowEp.hosts.includes("huggingface.co"));
   assert(allowEp.hosts.includes("*.hf.co"));
+
+  // The automation endpoint carries the automation convention hosts (M9).
+  const autoEp = policy.endpoints.find((e) => e.type === "automation")!;
+  assert(autoEp);
+  assert(autoEp.hosts.includes("automation:osascript"));
+  assert(autoEp.hosts.includes("automation:shortcuts:Daily Digest"));
 
   // An allow rule (with condition + credential) and a global default-deny.
   const allow = policy.rules.find((r) => r.verdict === "allow");

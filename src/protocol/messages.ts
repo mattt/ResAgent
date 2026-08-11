@@ -42,7 +42,18 @@ export type Request =
     params: { namespace?: string; objectId?: string; limit?: number };
   }
   | { id: number; method: "gate.rules"; params: Record<string, never> }
-  | { id: number; method: "gate.log"; params: { limit?: number } };
+  | { id: number; method: "gate.log"; params: { limit?: number } }
+  | {
+    id: number;
+    method: "automation.run";
+    params: {
+      target: string;
+      kind: "shortcuts" | "osascript";
+      name?: string;
+      script?: string;
+      input?: string;
+    };
+  };
 
 export type Method = Request["method"];
 
@@ -56,6 +67,7 @@ export const METHODS: readonly Method[] = [
   "logs.tail",
   "gate.rules",
   "gate.log",
+  "automation.run",
 ] as const;
 
 // ── Result payloads (by method) ──────────────────────────────────────────────
@@ -128,6 +140,20 @@ export interface GateLogEntry {
   approver?: string;
 }
 
+/**
+ * The result of running a Mac automation over the protocol (M9) — the first MUTATING method. Reports
+ * whether the gate allowed it and, if so, the subprocess outcome. Backends that don't broker
+ * automation omit `automationRun`, which the daemon answers with an error frame.
+ */
+export interface AutomationRunResult {
+  ran: boolean;
+  verdict: "allow" | "deny" | "approve" | "passthrough";
+  code?: number;
+  stdout?: string;
+  stderr?: string;
+  reason?: string;
+}
+
 export interface ResultByMethod {
   "status": DaemonStatus;
   "namespaces.list": NamespaceInfo[];
@@ -138,6 +164,7 @@ export interface ResultByMethod {
   "logs.tail": LogLine[];
   "gate.rules": GateRuleInfo[];
   "gate.log": GateLogEntry[];
+  "automation.run": AutomationRunResult;
 }
 
 // ── Responses ────────────────────────────────────────────────────────────────

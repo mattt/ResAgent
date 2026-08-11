@@ -136,6 +136,8 @@ function parseAllow(node: unknown): AllowRule[] {
         hosts: strArray(body.hosts),
         condition: body.condition != null ? str(body.condition) : undefined,
         credential: body.credential != null ? str(body.credential) : undefined,
+        shortcuts: body.shortcuts != null ? strArray(body.shortcuts) : undefined,
+        scripts: body.scripts === true ? true : undefined,
       });
     }
   }

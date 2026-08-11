@@ -495,6 +495,7 @@
         logsTail: (opts = {}) => call("logsTail", [opts]),
         gateRules: () => call("gateRules", []),
         gateLog: (opts = {}) => call("gateLog", [opts]),
+        automationRun: (params) => call("automationRun", [params]),
       };
     }
 
@@ -1024,6 +1025,14 @@
               reason: "no matching rule",
             },
           ]),
+        // Mutating (M9): the standalone fixture doesn't broker automation — mirrors a backend
+        // without automationRun (there is no mutating UI this pass).
+        automationRun: () =>
+          Promise.resolve({
+            ran: false,
+            verdict: "deny",
+            reason: "fixture does not broker automation",
+          }),
       };
     }
     </script>

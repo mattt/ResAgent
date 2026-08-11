@@ -61,12 +61,17 @@ export interface GateRule {
 }
 
 export interface AllowRule {
+  /** Block label: `https` for egress, `automation` for Mac automation (M9). */
   protocol: string;
   hosts: string[];
   /** Optional CEL-subset condition, e.g. `http.method == "GET"`. Absent = match any request. */
   condition?: string;
   /** Name of a top-level {@link Credential} the gate injects at the wire for matching requests. */
   credential?: string;
+  /** `allow "automation"`: named Shortcuts the object may run (M9). */
+  shortcuts?: string[];
+  /** `allow "automation"`: whether the object may run osascript (M9). */
+  scripts?: boolean;
 }
 
 /**

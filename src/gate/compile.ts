@@ -66,8 +66,26 @@ export function compileGates(manifest: Manifest): Policy {
 
   for (const gate of manifest.gates) {
     const base = slug(gate.target);
-    gate.allow.forEach((allow, i) => {
-      const epName = gate.allow.length > 1 ? `${base}-${i}` : base;
+
+    // Egress (`https`) and automation allows are named in independent groups so adding an automation
+    // block never renames the https endpoints (keeps the compiled endpoint names stable).
+    const httpsAllows = gate.allow.filter((a) => a.protocol !== "automation");
+    const autoAllows = gate.allow.filter((a) => a.protocol === "automation");
+
+    const pushDeny = (epName: string) => {
+      if (gate.denyDefault) {
+        rules.push({
+          name: `${epName}-deny`,
+          endpoint: epName,
+          priority: -100,
+          verdict: "deny",
+          reason: `default deny for ${gate.target}`,
+        });
+      }
+    };
+
+    httpsAllows.forEach((allow, i) => {
+      const epName = httpsAllows.length > 1 ? `${base}-${i}` : base;
       endpoints.push({ name: epName, type: "https", hosts: allow.hosts });
       rules.push({
         name: `${epName}-allow`,
@@ -78,15 +96,29 @@ export function compileGates(manifest: Manifest): Policy {
         verdict: "allow",
         reason: `allow ${allow.protocol} to ${allow.hosts.join(", ")}`,
       });
-      if (gate.denyDefault) {
-        rules.push({
-          name: `${epName}-deny`,
-          endpoint: epName,
-          priority: -100,
-          verdict: "deny",
-          reason: `default deny for ${gate.target}`,
-        });
-      }
+      pushDeny(epName);
+    });
+
+    // `allow "automation"` → an automation endpoint whose "hosts" are the automation convention
+    // strings, so the reference gate's host matching adjudicates it like any other endpoint (M9).
+    autoAllows.forEach((allow, i) => {
+      const epName = autoAllows.length > 1
+        ? `${base}-automation-${i}`
+        : `${base}-automation`;
+      const hosts = [
+        ...(allow.shortcuts ?? []).map((s) => `automation:shortcuts:${s}`),
+        ...(allow.scripts ? ["automation:osascript"] : []),
+      ];
+      endpoints.push({ name: epName, type: "automation", hosts });
+      rules.push({
+        name: `${epName}-allow`,
+        endpoint: epName,
+        priority: 0,
+        condition: allow.condition,
+        verdict: "allow",
+        reason: `allow automation (${hosts.join(", ") || "none"})`,
+      });
+      pushDeny(epName);
     });
 
     // Escalation rules sit between allow (0) and the default deny (-100): a matching request that

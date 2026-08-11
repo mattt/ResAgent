@@ -42,6 +42,13 @@ gate "research/ResearchAgent" {
     condition  = "http.method == \"GET\""
     credential = "hf"
   }
+  # Mac automation the object may drive (M9): a named Shortcut and osascript, nothing else.
+  # Automation runs through the same gate as egress — the host is an `automation:*` convention.
+  allow "automation" {
+    scripts   = true
+    shortcuts = ["Daily Digest"]
+  }
+
   # Borderline requests (a Hub write) escalate to the on-device open-weights judge (spec 3)
   # instead of a hard deny — the approver resolves the verdict chain (M7).
   approve "https" {

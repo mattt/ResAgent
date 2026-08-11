@@ -9,6 +9,7 @@
 
 import { decode, encode } from "./codec.ts";
 import type {
+  AutomationRunResult,
   DaemonStatus,
   GateLogEntry,
   GateRuleInfo,
@@ -19,7 +20,12 @@ import type {
   Request,
   StorageEntries,
 } from "./messages.ts";
-import type { GateLogOptions, LogsTailOptions, StorageListOptions } from "./server.ts";
+import type {
+  AutomationRunParams,
+  GateLogOptions,
+  LogsTailOptions,
+  StorageListOptions,
+} from "./server.ts";
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -126,6 +132,9 @@ export class ProtocolClient {
   }
   gateLog(opts: GateLogOptions = {}): Promise<GateLogEntry[]> {
     return this.#call("gate.log", { ...opts });
+  }
+  automationRun(params: AutomationRunParams): Promise<AutomationRunResult> {
+    return this.#call("automation.run", { ...params });
   }
 
   async close(): Promise<void> {

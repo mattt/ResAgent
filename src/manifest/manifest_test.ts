@@ -38,14 +38,23 @@ Deno.test("parses the manifest into the typed model", async () => {
   assertEquals(m.gates[0].target, "research/ResearchAgent");
   assertEquals(m.gates[0].denyDefault, true);
   assertEquals(m.gates[0].approver, "local-judge");
-  assert(m.gates[0].allow[0].hosts.includes("huggingface.co"));
+  const httpsAllow = m.gates[0].allow.find((a) => a.protocol === "https")!;
+  assert(httpsAllow.hosts.includes("huggingface.co"));
   assertEquals(m.serves[0].pattern, "research/*");
   assertEquals(m.serves[0].funnel, false);
   assert(m.serves[0].tailnetUsers.includes("mattt@"));
 
   // Gate allow rules carry the optional condition + credential (C4 → M6).
-  assertEquals(m.gates[0].allow[0].condition, 'http.method == "GET"');
-  assertEquals(m.gates[0].allow[0].credential, "hf");
+  assertEquals(httpsAllow.condition, 'http.method == "GET"');
+  assertEquals(httpsAllow.credential, "hf");
+
+  // An automation allow (M9) parses shortcuts + scripts and the approve escalation (M7) parses.
+  const autoAllow = m.gates[0].allow.find((a) => a.protocol === "automation")!;
+  assert(autoAllow.scripts);
+  assert(autoAllow.shortcuts?.includes("Daily Digest"));
+  assertEquals(m.gates[0].approve[0].condition, 'http.method == "POST"');
+  assertEquals(m.approvers[0].name, "local-judge");
+  assertEquals(m.approvers[0].type, "llm_approver");
 
   // The credential block parses; the real secret lives in Keychain, not here.
   assertEquals(m.credentials.length, 1);

@@ -43,6 +43,12 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
     return ep ? endpointRef(ep) : name;
   };
 
+  // Claw Patrol models network egress, not Mac automation — automation endpoints (and any rule that
+  // references one) are skipped; those verdicts are the reference gate's alone (M9).
+  const automationEndpoints = new Set(
+    policy.endpoints.filter((e) => e.type === "automation").map((e) => e.name),
+  );
+
   const out: string[] = ["schema_version = 1", ""];
 
   const gw: string[] = [];
@@ -64,6 +70,7 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
   }
 
   for (const ep of policy.endpoints) {
+    if (ep.type === "automation") continue; // not a Claw Patrol concept
     out.push(`endpoint "https" ${q(ep.name)} {`, `  hosts = ${arr(ep.hosts)}`, "}", "");
   }
 
@@ -95,6 +102,7 @@ export function toClawPatrolConfig(policy: Policy, opts: ConfigOptions = {}): st
   }
 
   for (const rule of policy.rules) {
+    if (rule.endpoint && automationEndpoints.has(rule.endpoint)) continue; // automation → skip
     const body: string[] = [];
     if (rule.endpoint) body.push(`  endpoint = ${refOf(rule.endpoint)}`);
     if (rule.priority !== 0) body.push(`  priority = ${rule.priority}`);

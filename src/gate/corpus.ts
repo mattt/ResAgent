@@ -15,6 +15,8 @@ export interface GateCase {
   facts: ActionFacts;
   /** Expected verdict — the reference gate is checked against this. */
   expect: Verdict;
+  /** Reference-gate only: the Claw Patrol oracle can't replay it (e.g. Mac automation). */
+  referenceOnly?: boolean;
 }
 
 export interface Corpus {
@@ -26,6 +28,12 @@ const policy: Policy = {
   endpoints: [
     { name: "hub", type: "https", hosts: ["huggingface.co", "*.hf.co"] },
     { name: "api", type: "https", hosts: ["api.example.com"] },
+    // A Mac automation endpoint (M9): its "hosts" are the automation convention strings.
+    {
+      name: "auto",
+      type: "automation",
+      hosts: ["automation:shortcuts:Daily Digest", "automation:osascript"],
+    },
   ],
   credentials: [{
     name: "hf",
@@ -86,6 +94,21 @@ const policy: Policy = {
       verdict: "deny",
       reason: "api default deny",
     },
+    // Automation: only the listed shortcut and osascript are allowed (M9).
+    {
+      name: "auto-allow",
+      endpoint: "auto",
+      priority: 0,
+      verdict: "allow",
+      reason: "allowed automation",
+    },
+    {
+      name: "auto-deny",
+      endpoint: "auto",
+      priority: -100,
+      verdict: "deny",
+      reason: "automation default deny",
+    },
   ],
 };
 
@@ -126,6 +149,34 @@ export const corpus: Corpus = {
       name: "api DELETE /v1 is denied",
       facts: http("api.example.com", "DELETE", "/v1/x"),
       expect: "deny",
+    },
+    // Automation (M9) — reference-gate only; Claw Patrol doesn't model Mac automation.
+    {
+      name: "a listed shortcut is allowed",
+      facts: {
+        host: "automation:shortcuts:Daily Digest",
+        automation: { kind: "shortcuts", name: "Daily Digest" },
+      },
+      expect: "allow",
+      referenceOnly: true,
+    },
+    {
+      name: "an unlisted shortcut is denied",
+      facts: {
+        host: "automation:shortcuts:Wipe Disk",
+        automation: { kind: "shortcuts", name: "Wipe Disk" },
+      },
+      expect: "deny",
+      referenceOnly: true,
+    },
+    {
+      name: "an allowed osascript runs",
+      facts: {
+        host: "automation:osascript",
+        automation: { kind: "osascript", input: "1+1" },
+      },
+      expect: "allow",
+      referenceOnly: true,
     },
   ],
 };

@@ -190,17 +190,46 @@ function validateGate(path: string, body: Json, out: ManifestIssue[]): void {
   unknownKeys(path, body, ["allow", "approve", "approver", "deny_default"], out);
   checkString(path, body, "approver", out);
   checkBool(path, body, "deny_default", out);
-  eachLabeled(body.allow, `${path}.allow`, out, (p, ab) => {
-    unknownKeys(p, ab, ["hosts", "condition", "credential"], out);
-    checkStringArray(p, ab, "hosts", out, true);
-    checkString(p, ab, "condition", out);
-    checkString(p, ab, "credential", out);
-  });
+  validateAllow(body.allow, `${path}.allow`, out);
   eachLabeled(body.approve, `${path}.approve`, out, (p, ab) => {
     unknownKeys(p, ab, ["hosts", "condition"], out);
     checkStringArray(p, ab, "hosts", out, true);
     checkString(p, ab, "condition", out);
   });
+}
+
+/**
+ * Validate a gate's `allow` blocks, branching on the block label: `automation` takes
+ * shortcuts/scripts (hosts/credential forbidden), everything else is an egress protocol taking
+ * hosts/credential (shortcuts/scripts forbidden). unknownKeys enforces the "and vice versa".
+ */
+function validateAllow(node: unknown, basePath: string, out: ManifestIssue[]): void {
+  if (node === undefined) return;
+  const map = obj(node);
+  if (!map) {
+    out.push({ path: basePath, message: "expected a labeled block" });
+    return;
+  }
+  for (const [label, val] of Object.entries(map)) {
+    const bs = bodies(val);
+    if (bs.length === 0) {
+      out.push({ path: `${basePath}.${label}`, message: "empty block body" });
+    }
+    const p = `${basePath}.${label}`;
+    for (const ab of bs) {
+      if (label === "automation") {
+        unknownKeys(p, ab, ["shortcuts", "scripts", "condition"], out);
+        checkStringArray(p, ab, "shortcuts", out);
+        checkBool(p, ab, "scripts", out);
+        checkString(p, ab, "condition", out);
+      } else {
+        unknownKeys(p, ab, ["hosts", "condition", "credential"], out);
+        checkStringArray(p, ab, "hosts", out, true);
+        checkString(p, ab, "condition", out);
+        checkString(p, ab, "credential", out);
+      }
+    }
+  }
 }
 
 function validateApprover(path: string, body: Json, out: ManifestIssue[]): void {

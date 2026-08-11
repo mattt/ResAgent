@@ -33,6 +33,20 @@ export interface SshFacet {
   command?: string;
 }
 
+/**
+ * A Mac automation action (M9). Modeled as a facet so the gate treats "run this shortcut/script"
+ * exactly like an egress request: the `host` is the automation convention string
+ * (`automation:shortcuts:<name>` / `automation:osascript`), so `hostMatches` and the reference gate
+ * work unchanged; `automation.*` selectors read this facet in a CEL condition.
+ */
+export interface AutomationFacet {
+  kind: "shortcuts" | "osascript";
+  /** Shortcut name (for `kind: "shortcuts"`). */
+  name?: string;
+  /** Input passed to the shortcut, or the osascript source. */
+  input?: string;
+}
+
 export interface ActionFacts {
   /** The host the agent dialed, e.g. `huggingface.co`. */
   host: string;
@@ -43,4 +57,5 @@ export interface ActionFacts {
   sql?: SqlFacet;
   k8s?: K8sFacet;
   ssh?: SshFacet;
+  automation?: AutomationFacet;
 }

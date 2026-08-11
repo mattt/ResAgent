@@ -17,11 +17,13 @@ import inspectorHtml from "./inspector.html" with { type: "text" };
 import { ProtocolClient } from "../protocol/client.ts";
 import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
 import type {
+  AutomationRunParams,
   GateLogOptions,
   LogsTailOptions,
   StorageListOptions,
 } from "../protocol/server.ts";
 import type {
+  AutomationRunResult,
   DaemonStatus,
   GateLogEntry,
   GateRuleInfo,
@@ -49,6 +51,11 @@ interface ShellApi {
   // memoryBackend provide them at runtime, and the inspector's Gate tab tolerates their absence.
   gateRules?(): Promise<GateRuleInfo[]> | GateRuleInfo[];
   gateLog?(opts: GateLogOptions): Promise<GateLogEntry[]> | GateLogEntry[];
+  // Mutating (M9); absent on backends that don't broker automation. No mutating UI this pass — the
+  // verdict surfaces in the Gate → Log tab; this keeps the protocol surface complete.
+  automationRun?(
+    params: AutomationRunParams,
+  ): Promise<AutomationRunResult> | AutomationRunResult;
 }
 
 const BOUND_METHODS = [
@@ -61,6 +68,7 @@ const BOUND_METHODS = [
   "logsTail",
   "gateRules",
   "gateLog",
+  "automationRun",
 ] as const;
 
 // ── Desktop API shim (typed so `deno check` passes without the desktop lib) ──

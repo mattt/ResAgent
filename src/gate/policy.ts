@@ -12,10 +12,14 @@
 /** A gate decision. Mirrors Claw Patrol's verdict vocabulary so fixtures compare directly. */
 export type Verdict = "allow" | "deny" | "approve" | "passthrough";
 
-/** A typed network target: a host allow-list. Only `https` is modeled in M6. */
+/**
+ * A typed target: a host allow-list. `https` is an egress endpoint (M6); `automation` is a Mac
+ * automation endpoint (M9) whose "hosts" are the automation convention strings
+ * (`automation:shortcuts:<name>` / `automation:osascript`), so host matching is reused verbatim.
+ */
 export interface Endpoint {
   name: string;
-  type: "https";
+  type: "https" | "automation";
   /** Host globs (only `*` wildcard), e.g. `["huggingface.co", "*.hf.co"]`. */
   hosts: string[];
 }

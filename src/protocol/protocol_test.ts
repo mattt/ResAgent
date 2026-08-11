@@ -44,6 +44,14 @@ const GOLDEN: [Message, string][] = [
     `{"id":6,"method":"gate.log","params":{"limit":50}}`,
   ],
   [
+    {
+      id: 7,
+      method: "automation.run",
+      params: { target: "research/ResearchAgent", kind: "osascript", script: "1+1" },
+    },
+    `{"id":7,"method":"automation.run","params":{"kind":"osascript","script":"1+1","target":"research/ResearchAgent"}}`,
+  ],
+  [
     { id: 5, ok: false, error: { code: "not_found", message: "no object" } },
     `{"error":{"code":"not_found","message":"no object"},"id":5,"ok":false}`,
   ],

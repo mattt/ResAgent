@@ -112,6 +112,9 @@ export async function runClawPatrolOracle(
   const ref = new ReferenceGate();
   await ref.applyPolicy(corpus.policy);
 
+  // Claw Patrol replays only what it models — drop reference-only cases (e.g. Mac automation, M9).
+  const replayCases = corpus.cases.filter((c) => !c.referenceOnly);
+
   const dir = await Deno.makeTempDir({ prefix: "resagent-gate-oracle-" });
   const config = `${dir}/config.hcl`;
   const cfg = { ...DEFAULT_CONFIG, ...opts.config, stateDir: `${dir}/state` };
@@ -127,8 +130,8 @@ export async function runClawPatrolOracle(
   await Deno.mkdir(fixDir);
   // reference output per case, and a fixture file whose basename indexes back to the case.
   const refOut: VerdictResult[] = [];
-  for (let i = 0; i < corpus.cases.length; i++) {
-    const c = corpus.cases[i];
+  for (let i = 0; i < replayCases.length; i++) {
+    const c = replayCases[i];
     const out = await ref.evaluate(c.facts);
     refOut.push(out);
     const name = `${String(i).padStart(3, "0")}.json`;
@@ -148,7 +151,7 @@ export async function runClawPatrolOracle(
     if (m) status.set(Number(m[3]), { ok: m[1] === "ok", detail: m[4] });
   }
 
-  const cases = corpus.cases.map((c, i) => {
+  const cases = replayCases.map((c, i) => {
     const refVerdict = refOut[i].verdict;
     const st = status.get(i);
     const refMatchesExpect = refVerdict === c.expect;
