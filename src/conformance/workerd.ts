@@ -123,8 +123,12 @@ export function workerdEngine(opts: WorkerdOptions = {}): Engine {
       const s = await server;
       server = null;
       // workerd does not exit promptly on SIGTERM in serve mode; SIGKILL so status resolves.
-      s.child.kill("SIGKILL");
-      await s.child.status;
+      // It may also have already exited on its own (e.g. delivering a live alarm), so the kill is
+      // best-effort — close() must stay safe to call regardless.
+      try {
+        s.child.kill("SIGKILL");
+        await s.child.status;
+      } catch { /* already exited */ }
       await Deno.remove(s.dir, { recursive: true });
     },
   };
