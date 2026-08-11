@@ -41,7 +41,8 @@ export type Request =
     method: "logs.tail";
     params: { namespace?: string; objectId?: string; limit?: number };
   }
-  | { id: number; method: "gate.rules"; params: Record<string, never> };
+  | { id: number; method: "gate.rules"; params: Record<string, never> }
+  | { id: number; method: "gate.log"; params: { limit?: number } };
 
 export type Method = Request["method"];
 
@@ -54,6 +55,7 @@ export const METHODS: readonly Method[] = [
   "alarms.get",
   "logs.tail",
   "gate.rules",
+  "gate.log",
 ] as const;
 
 // ── Result payloads (by method) ──────────────────────────────────────────────
@@ -107,6 +109,25 @@ export interface GateRuleInfo {
   reason?: string;
 }
 
+/**
+ * One logged egress-gate verdict, flattened for the inspector's Gate → Log view (M6). Recorded when
+ * the gate evaluates an intercepted request; `finalVerdict`/`approver` are set when an approve
+ * verdict is resolved through a verdict chain (M7), otherwise absent.
+ */
+export interface GateLogEntry {
+  at: number;
+  host: string;
+  method?: string;
+  path?: string;
+  verdict: "allow" | "deny" | "approve" | "passthrough";
+  /** Resolved verdict after an approver chain ran (M7). */
+  finalVerdict?: "allow" | "deny";
+  rule?: string;
+  reason?: string;
+  credential?: string;
+  approver?: string;
+}
+
 export interface ResultByMethod {
   "status": DaemonStatus;
   "namespaces.list": NamespaceInfo[];
@@ -116,6 +137,7 @@ export interface ResultByMethod {
   "alarms.get": number | null;
   "logs.tail": LogLine[];
   "gate.rules": GateRuleInfo[];
+  "gate.log": GateLogEntry[];
 }
 
 // ── Responses ────────────────────────────────────────────────────────────────

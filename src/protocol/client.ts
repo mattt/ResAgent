@@ -10,6 +10,7 @@
 import { decode, encode } from "./codec.ts";
 import type {
   DaemonStatus,
+  GateLogEntry,
   GateRuleInfo,
   Json,
   LogLine,
@@ -18,7 +19,7 @@ import type {
   Request,
   StorageEntries,
 } from "./messages.ts";
-import type { LogsTailOptions, StorageListOptions } from "./server.ts";
+import type { GateLogOptions, LogsTailOptions, StorageListOptions } from "./server.ts";
 
 interface Pending {
   resolve: (value: unknown) => void;
@@ -122,6 +123,9 @@ export class ProtocolClient {
   }
   gateRules(): Promise<GateRuleInfo[]> {
     return this.#call("gate.rules", {});
+  }
+  gateLog(opts: GateLogOptions = {}): Promise<GateLogEntry[]> {
+    return this.#call("gate.log", { ...opts });
   }
 
   async close(): Promise<void> {

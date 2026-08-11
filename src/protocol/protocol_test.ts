@@ -40,6 +40,10 @@ const GOLDEN: [Message, string][] = [
     `{"id":4,"ok":true,"result":[{"name":"research","objectCount":2}]}`,
   ],
   [
+    { id: 6, method: "gate.log", params: { limit: 50 } },
+    `{"id":6,"method":"gate.log","params":{"limit":50}}`,
+  ],
+  [
     { id: 5, ok: false, error: { code: "not_found", message: "no object" } },
     `{"error":{"code":"not_found","message":"no object"},"id":5,"ok":false}`,
   ],

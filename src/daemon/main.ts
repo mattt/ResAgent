@@ -13,10 +13,15 @@
 import { createDaemon, type DaemonBackend, serveConn } from "../protocol/server.ts";
 import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
 import { celldBackend } from "./celld_backend.ts";
-import type { GateRuleInfo } from "../protocol/messages.ts";
+import type { GateLogEntry, GateRuleInfo } from "../protocol/messages.ts";
+import type { GateLogOptions } from "../protocol/server.ts";
 import { parseManifest } from "../manifest/parse.ts";
 import { compileGates } from "../gate/compile.ts";
 import { policyToGateRules } from "../gate/inspector.ts";
+import type { Policy } from "../gate/policy.ts";
+import { GateLog, loggingGate, toGateLogEntries } from "../gate/log.ts";
+import { ReferenceGate } from "../gate/reference.ts";
+import { corpus } from "../gate/corpus.ts";
 
 export interface RunningDaemon {
   path: string;
@@ -65,27 +70,46 @@ export function serveUnix(path: string, backend: DaemonBackend): RunningDaemon {
   };
 }
 
-/**
- * Load the egress-gate rules the daemon serves over C5 (`gate.rules`) from the C4 manifest at
- * RESAGENT_MANIFEST (default the flagship example). The gate lives above the engine, so this wraps
- * whichever backend rather than teaching celld_backend.ts about gates. A missing/invalid manifest
- * degrades to no rules (a warning), never a failed boot.
- */
-async function loadGateRules(): Promise<GateRuleInfo[]> {
-  const path = Deno.env.get("RESAGENT_MANIFEST") ??
-    "examples/research-agent/resagent.hcl";
-  try {
-    const policy = compileGates(await parseManifest(await Deno.readTextFile(path)));
-    return policyToGateRules(policy);
-  } catch (e) {
-    console.warn(`gate policy: could not load ${path}: ${(e as Error).message}`);
-    return [];
-  }
+interface GateSurface {
+  rules: GateRuleInfo[];
+  log: GateLog;
 }
 
-/** Add a `gate.rules` view to any backend without the backend knowing about gates. */
-function withGateRules(backend: DaemonBackend, rules: GateRuleInfo[]): DaemonBackend {
-  return { ...backend, gateRules: () => rules };
+/**
+ * Build the egress-gate read surface the daemon serves over C5 (`gate.rules` + `gate.log`) from the
+ * C4 manifest at RESAGENT_MANIFEST (default the flagship example). The gate lives above the engine,
+ * so this wraps whichever backend rather than teaching celld_backend.ts about gates. A missing or
+ * invalid manifest degrades to an empty policy (a warning), never a failed boot. Set
+ * RESAGENT_GATE_SEED=corpus to replay the M6 corpus through an in-process reference gate so the Log
+ * view isn't empty in a fresh daemon (dev/demo aid — real verdicts arrive from the running gateway).
+ */
+async function loadGate(): Promise<GateSurface> {
+  const path = Deno.env.get("RESAGENT_MANIFEST") ??
+    "examples/research-agent/resagent.hcl";
+  let policy: Policy = { endpoints: [], credentials: [], rules: [] };
+  try {
+    policy = compileGates(await parseManifest(await Deno.readTextFile(path)));
+  } catch (e) {
+    console.warn(`gate policy: could not load ${path}: ${(e as Error).message}`);
+  }
+
+  const log = new GateLog();
+  if (Deno.env.get("RESAGENT_GATE_SEED") === "corpus") {
+    const gate = loggingGate(new ReferenceGate(), log);
+    await gate.applyPolicy(policy);
+    for (const c of corpus.cases) await gate.evaluate(c.facts);
+  }
+  return { rules: policyToGateRules(policy), log };
+}
+
+/** Add the `gate.rules` + `gate.log` views to any backend without the backend knowing about gates. */
+function withGate(backend: DaemonBackend, gate: GateSurface): DaemonBackend {
+  return {
+    ...backend,
+    gateRules: () => gate.rules,
+    gateLog: (opts: GateLogOptions): GateLogEntry[] =>
+      toGateLogEntries(gate.log.entries(opts.limit)),
+  };
 }
 
 function defaultSocketPath(): string {
@@ -131,8 +155,8 @@ if (import.meta.main) {
     backend = memoryBackend(DEV_SEED);
   }
 
-  // The gate rides above the engine: serve the compiled manifest's rules over `gate.rules`.
-  backend = withGateRules(backend, await loadGateRules());
+  // The gate rides above the engine: serve the compiled manifest's rules + verdict log over C5.
+  backend = withGate(backend, await loadGate());
 
   const daemon = serveUnix(path, backend);
   console.info(`ResAgent daemon listening on ${path}`);

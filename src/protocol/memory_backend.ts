@@ -6,9 +6,15 @@
  * run on. The Celld backend implements the same interface later.
  */
 
-import type { DaemonBackend, LogsTailOptions, StorageListOptions } from "./server.ts";
+import type {
+  DaemonBackend,
+  GateLogOptions,
+  LogsTailOptions,
+  StorageListOptions,
+} from "./server.ts";
 import type {
   DaemonStatus,
+  GateLogEntry,
   GateRuleInfo,
   Json,
   LogLine,
@@ -36,6 +42,7 @@ export interface MemorySeed {
   namespaces: MemoryNamespace[];
   logs?: LogLine[];
   gate?: GateRuleInfo[];
+  gateLog?: GateLogEntry[];
 }
 
 export function memoryBackend(seed: MemorySeed): DaemonBackend {
@@ -106,6 +113,11 @@ export function memoryBackend(seed: MemorySeed): DaemonBackend {
 
     gateRules(): GateRuleInfo[] {
       return seed.gate ?? [];
+    },
+
+    gateLog(opts: GateLogOptions): GateLogEntry[] {
+      const log = seed.gateLog ?? [];
+      return opts.limit !== undefined ? log.slice(-opts.limit) : log;
     },
   };
 }

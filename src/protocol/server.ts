@@ -11,6 +11,7 @@
 import { decode, encode, ProtocolError } from "./codec.ts";
 import type {
   DaemonStatus,
+  GateLogEntry,
   GateRuleInfo,
   Json,
   LogLine,
@@ -32,6 +33,10 @@ export interface LogsTailOptions {
   limit?: number;
 }
 
+export interface GateLogOptions {
+  limit?: number;
+}
+
 /** What a daemon must be able to answer. Any engine (Celld, Swift, in-memory) implements this. */
 export interface DaemonBackend {
   status(): Promise<DaemonStatus> | DaemonStatus;
@@ -47,6 +52,8 @@ export interface DaemonBackend {
   logsTail(opts: LogsTailOptions): Promise<LogLine[]> | LogLine[];
   /** The compiled egress-gate rules (M6). Optional — engines without a gate return none. */
   gateRules?(): Promise<GateRuleInfo[]> | GateRuleInfo[];
+  /** The recent egress-gate verdict log (M6). Optional — absent returns none, like gateRules. */
+  gateLog?(opts: GateLogOptions): Promise<GateLogEntry[]> | GateLogEntry[];
 }
 
 async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> {
@@ -78,6 +85,8 @@ async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> 
       });
     case "gate.rules":
       return backend.gateRules ? await backend.gateRules() : [];
+    case "gate.log":
+      return backend.gateLog ? await backend.gateLog({ limit: req.params.limit }) : [];
   }
 }
 

@@ -494,6 +494,7 @@
         alarmGet: (ns, id) => call("alarmGet", [ns, id]),
         logsTail: (opts = {}) => call("logsTail", [opts]),
         gateRules: () => call("gateRules", []),
+        gateLog: (opts = {}) => call("gateLog", [opts]),
       };
     }
 
@@ -514,7 +515,7 @@
       }
     }
 
-    const state = { ns: null, obj: null, tab: "storage", view: "typed" };
+    const state = { ns: null, obj: null, tab: "storage", view: "typed", gateView: "rules" };
 
     // ── Rendering ───────────────────────────────────────────────────
     const el = (id) => document.getElementById(id);
@@ -626,12 +627,19 @@
     async function renderInspector() {
       const body = el("inspectorBody");
       const toolbar = el("toolbar");
-      // The Gate tab is policy-level: it renders the compiled egress rules even with no object
-      // selected (the gate governs objects; it isn't a per-object resource fork).
+      // The Gate tab is policy-level: it renders the compiled egress rules (or the live verdict log)
+      // even with no object selected — the gate governs objects; it isn't a per-object resource fork.
       if (state.tab === "gate") {
         toolbar.hidden = true;
-        const rows = await api.gateRules();
-        body.replaceChildren(gateView(rows));
+        const wrap = document.createElement("div");
+        wrap.append(gateToggle());
+        if (state.gateView === "log") {
+          const entries = api.gateLog ? await api.gateLog({ limit: 200 }) : [];
+          wrap.append(gateLogView(entries));
+        } else {
+          wrap.append(gateView(await api.gateRules()));
+        }
+        body.replaceChildren(wrap);
         return;
       }
       if (!state.obj) {
@@ -752,6 +760,50 @@
       pre.textContent = logs.map((l) =>
         `${new Date(l.at).toISOString()}  ${l.level.toUpperCase().padEnd(5)}  ${l.message}`
       ).join("\n");
+      return pre;
+    }
+
+    // The Rules | Log segmented toggle for the Gate tab — the same control idiom as Typed | Raw.
+    function gateToggle() {
+      const bar = document.createElement("div");
+      bar.className = "inspector__toolbar";
+      const label = document.createElement("span");
+      label.textContent = "egress gate";
+      const seg = document.createElement("span");
+      seg.className = "segmented";
+      seg.setAttribute("role", "group");
+      seg.setAttribute("aria-label", "Gate view");
+      const mk = (text, val) => {
+        const b = document.createElement("button");
+        b.textContent = text;
+        b.setAttribute("aria-pressed", String(state.gateView === val));
+        b.addEventListener("click", () => {
+          state.gateView = val;
+          renderInspector();
+        });
+        return b;
+      };
+      seg.append(mk("Rules", "rules"), mk("Log", "log"));
+      bar.append(label, seg);
+      return bar;
+    }
+
+    function gateLogView(entries) {
+      if (!entries || !entries.length) {
+        return Object.assign(document.createElement("p"), {
+          className: "empty",
+          textContent: "No gate verdicts logged yet.",
+        });
+      }
+      const pre = document.createElement("pre");
+      pre.className = "hex";
+      pre.textContent = entries.map((e) => {
+        const t = new Date(e.at).toISOString();
+        const req = e.method ? `${e.method} ${e.host}${e.path ?? ""}` : e.host;
+        const v = (e.finalVerdict ?? e.verdict).toUpperCase().padEnd(8);
+        const rule = e.rule ? ` [${e.rule}]` : "";
+        return `${t}  ${v} ${req}${rule}`;
+      }).join("\n");
       return pre;
     }
 
@@ -941,6 +993,35 @@
               verdict: "deny",
               priority: -100,
               reason: "default deny for research/ResearchAgent",
+            },
+          ]),
+        gateLog: () =>
+          Promise.resolve([
+            {
+              at: 1786203600000,
+              host: "huggingface.co",
+              method: "GET",
+              path: "/api/models",
+              verdict: "allow",
+              rule: "research-ResearchAgent-allow",
+              credential: "hf",
+            },
+            {
+              at: 1786203601000,
+              host: "huggingface.co",
+              method: "POST",
+              path: "/api/models",
+              verdict: "deny",
+              rule: "research-ResearchAgent-deny",
+              reason: "default deny for research/ResearchAgent",
+            },
+            {
+              at: 1786203602000,
+              host: "pastebin.com",
+              method: "GET",
+              path: "/",
+              verdict: "deny",
+              reason: "no matching rule",
             },
           ]),
       };

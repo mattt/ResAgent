@@ -16,9 +16,14 @@
 import inspectorHtml from "./inspector.html" with { type: "text" };
 import { ProtocolClient } from "../protocol/client.ts";
 import { memoryBackend, type MemorySeed } from "../protocol/memory_backend.ts";
-import type { LogsTailOptions, StorageListOptions } from "../protocol/server.ts";
+import type {
+  GateLogOptions,
+  LogsTailOptions,
+  StorageListOptions,
+} from "../protocol/server.ts";
 import type {
   DaemonStatus,
+  GateLogEntry,
   GateRuleInfo,
   Json,
   LogLine,
@@ -40,9 +45,10 @@ interface ShellApi {
   storageGet(ns: string, id: string, key: string): Promise<Json> | Json;
   alarmGet(ns: string, id: string): Promise<number | null> | (number | null);
   logsTail(opts: LogsTailOptions): Promise<LogLine[]> | LogLine[];
-  // Optional to match DaemonBackend (engines without a gate omit it); both the ProtocolClient and
-  // memoryBackend provide it at runtime, and the inspector's Gate tab tolerates its absence.
+  // Optional to match DaemonBackend (engines without a gate omit them); both the ProtocolClient and
+  // memoryBackend provide them at runtime, and the inspector's Gate tab tolerates their absence.
   gateRules?(): Promise<GateRuleInfo[]> | GateRuleInfo[];
+  gateLog?(opts: GateLogOptions): Promise<GateLogEntry[]> | GateLogEntry[];
 }
 
 const BOUND_METHODS = [
@@ -54,6 +60,7 @@ const BOUND_METHODS = [
   "alarmGet",
   "logsTail",
   "gateRules",
+  "gateLog",
 ] as const;
 
 // ── Desktop API shim (typed so `deno check` passes without the desktop lib) ──
