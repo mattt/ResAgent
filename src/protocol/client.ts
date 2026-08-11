@@ -11,6 +11,8 @@ import { decode, encode } from "./codec.ts";
 import type {
   AutomationRunResult,
   DaemonStatus,
+  FolderGrantInfo,
+  FsWriteResult,
   GateLogEntry,
   GateRuleInfo,
   Json,
@@ -135,6 +137,15 @@ export class ProtocolClient {
   }
   automationRun(params: AutomationRunParams): Promise<AutomationRunResult> {
     return this.#call("automation.run", { ...params });
+  }
+  grantsList(): Promise<FolderGrantInfo[]> {
+    return this.#call("grants.list", {});
+  }
+  fsRead(path: string): Promise<string> {
+    return this.#call("fs.read", { path });
+  }
+  fsWrite(path: string, data: string): Promise<FsWriteResult> {
+    return this.#call("fs.write", { path, data });
   }
 
   async close(): Promise<void> {

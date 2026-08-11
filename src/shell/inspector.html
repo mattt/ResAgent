@@ -443,6 +443,8 @@
               tabindex="0">Logs</span>
             <span class="tab" role="tab" data-tab="gate" aria-selected="false"
               tabindex="0">Gate</span>
+            <span class="tab" role="tab" data-tab="grants" aria-selected="false"
+              tabindex="0">Grants</span>
           </div>
           <div class="inspector__toolbar" id="toolbar" hidden>
             <span id="toolbarLabel"></span>
@@ -496,6 +498,9 @@
         gateRules: () => call("gateRules", []),
         gateLog: (opts = {}) => call("gateLog", [opts]),
         automationRun: (params) => call("automationRun", [params]),
+        grantsList: () => call("grantsList", []),
+        fsRead: (path) => call("fsRead", [path]),
+        fsWrite: (path, data) => call("fsWrite", [path, data]),
       };
     }
 
@@ -641,6 +646,13 @@
           wrap.append(gateView(await api.gateRules()));
         }
         body.replaceChildren(wrap);
+        return;
+      }
+      // The Grants tab is policy-level too: the folders objects may touch (M10).
+      if (state.tab === "grants") {
+        toolbar.hidden = true;
+        const grants = api.grantsList ? await api.grantsList() : [];
+        body.replaceChildren(grantsView(grants));
         return;
       }
       if (!state.obj) {
@@ -847,6 +859,38 @@
       return table;
     }
 
+    function grantsView(grants) {
+      if (!grants || !grants.length) {
+        return Object.assign(document.createElement("p"), {
+          className: "empty",
+          textContent: "No folder grants.",
+        });
+      }
+      const cell = (text, cls) => {
+        const td = document.createElement("td");
+        td.className = cls;
+        td.textContent = text;
+        return td;
+      };
+      const table = document.createElement("table");
+      table.className = "kv gate";
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Path</th><th>Mode</th><th>Granted</th></tr>";
+      table.append(thead);
+      const tb = document.createElement("tbody");
+      for (const g of grants) {
+        const tr = document.createElement("tr");
+        tr.append(
+          cell(g.path, "wrap"),
+          cell(g.mode, "mono"),
+          cell(new Date(g.grantedAt).toISOString().slice(0, 10), "mono"),
+        );
+        tb.append(tr);
+      }
+      table.append(tb);
+      return table;
+    }
+
     function escapeHtml(s) {
       return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
     }
@@ -1033,6 +1077,19 @@
             verdict: "deny",
             reason: "fixture does not broker automation",
           }),
+        grantsList: () =>
+          Promise.resolve([
+            {
+              path: "/Users/you/ResAgent/research",
+              mode: "read-write",
+              grantedAt: 1786200000000,
+            },
+            {
+              path: "/Users/you/Documents/inbox",
+              mode: "read-only",
+              grantedAt: 1786100000000,
+            },
+          ]),
       };
     }
     </script>

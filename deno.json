@@ -17,6 +17,7 @@
     "gate:approve": "deno run --allow-read --allow-env --allow-net src/gate/approve_demo.ts",
     "serve:translate": "deno run --allow-read --allow-env --allow-run src/serve/translate.ts",
     "automation:demo": "deno run --allow-read --allow-env --allow-run src/automation/demo.ts",
+    "grants": "deno run --allow-read --allow-write --allow-env src/fs/cli.ts",
     "test:automation": "deno test --allow-run --allow-read --allow-env src/automation/executor_test.ts",
     "lint:objects": "deno run --allow-read src/lint/object_lint.ts",
     "shell": "deno desktop --hmr --allow-net --allow-read --allow-write --allow-env src/shell/main.ts",
@@ -25,7 +26,7 @@
     "daemon:celld": "RESAGENT_ENGINE=celld deno run --allow-read --allow-write --allow-net --allow-env --allow-run --allow-sys src/daemon/main.ts",
     "test": "deno test --allow-read --allow-write --allow-net --allow-env src/",
     "test:keychain": "deno test --allow-run --allow-read --allow-env src/gate/keychain_test.ts",
-    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts src/conformance/run.ts src/conformance/alarm_probe.ts src/conformance/op_executor.ts src/lint/object_lint.ts src/protocol/codec.ts src/protocol/server.ts src/protocol/memory_backend.ts src/protocol/client.ts src/shell/main.ts src/daemon/main.ts src/daemon/celld_backend.ts src/daemon/registry.ts src/gate/run.ts src/gate/translate.ts src/gate/validate.ts src/gate/demo.ts src/gate/inspector.ts src/gate/log.ts src/gate/approver.ts src/gate/approve_demo.ts src/serve/identity.ts src/serve/ingress.ts src/serve/translate.ts src/automation/executor.ts src/automation/binding.ts src/automation/demo.ts examples/research-agent/index.ts",
+    "check": "deno check src/ai/main.ts src/ai/backend.ts src/hub/pull.ts src/manifest/translate.ts src/manifest/validate.ts src/conformance/run.ts src/conformance/alarm_probe.ts src/conformance/op_executor.ts src/lint/object_lint.ts src/protocol/codec.ts src/protocol/server.ts src/protocol/memory_backend.ts src/protocol/client.ts src/shell/main.ts src/daemon/main.ts src/daemon/celld_backend.ts src/daemon/registry.ts src/gate/run.ts src/gate/translate.ts src/gate/validate.ts src/gate/demo.ts src/gate/inspector.ts src/gate/log.ts src/gate/approver.ts src/gate/approve_demo.ts src/serve/identity.ts src/serve/ingress.ts src/serve/translate.ts src/automation/executor.ts src/automation/binding.ts src/automation/demo.ts src/fs/grants.ts src/fs/binding.ts src/fs/cli.ts examples/research-agent/index.ts",
     "fmt": "deno fmt",
     "lint": "deno lint"
   },

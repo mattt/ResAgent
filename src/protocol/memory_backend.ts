@@ -14,6 +14,7 @@ import type {
 } from "./server.ts";
 import type {
   DaemonStatus,
+  FolderGrantInfo,
   GateLogEntry,
   GateRuleInfo,
   Json,
@@ -43,6 +44,7 @@ export interface MemorySeed {
   logs?: LogLine[];
   gate?: GateRuleInfo[];
   gateLog?: GateLogEntry[];
+  grants?: FolderGrantInfo[];
 }
 
 export function memoryBackend(seed: MemorySeed): DaemonBackend {
@@ -118,6 +120,10 @@ export function memoryBackend(seed: MemorySeed): DaemonBackend {
     gateLog(opts: GateLogOptions): GateLogEntry[] {
       const log = seed.gateLog ?? [];
       return opts.limit !== undefined ? log.slice(-opts.limit) : log;
+    },
+
+    grantsList(): FolderGrantInfo[] {
+      return seed.grants ?? [];
     },
   };
 }

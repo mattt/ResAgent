@@ -53,7 +53,10 @@ export type Request =
       script?: string;
       input?: string;
     };
-  };
+  }
+  | { id: number; method: "grants.list"; params: Record<string, never> }
+  | { id: number; method: "fs.read"; params: { path: string } }
+  | { id: number; method: "fs.write"; params: { path: string; data: string } };
 
 export type Method = Request["method"];
 
@@ -68,6 +71,9 @@ export const METHODS: readonly Method[] = [
   "gate.rules",
   "gate.log",
   "automation.run",
+  "grants.list",
+  "fs.read",
+  "fs.write",
 ] as const;
 
 // ── Result payloads (by method) ──────────────────────────────────────────────
@@ -154,6 +160,18 @@ export interface AutomationRunResult {
   reason?: string;
 }
 
+/** One folder grant, flattened for the inspector's Grants tab (M10). */
+export interface FolderGrantInfo {
+  path: string;
+  mode: "read-only" | "read-write";
+  grantedAt: number;
+}
+
+/** The result of a scoped write over the protocol (M10). */
+export interface FsWriteResult {
+  bytes: number;
+}
+
 export interface ResultByMethod {
   "status": DaemonStatus;
   "namespaces.list": NamespaceInfo[];
@@ -165,6 +183,9 @@ export interface ResultByMethod {
   "gate.rules": GateRuleInfo[];
   "gate.log": GateLogEntry[];
   "automation.run": AutomationRunResult;
+  "grants.list": FolderGrantInfo[];
+  "fs.read": string;
+  "fs.write": FsWriteResult;
 }
 
 // ── Responses ────────────────────────────────────────────────────────────────

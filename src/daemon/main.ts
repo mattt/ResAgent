@@ -24,6 +24,8 @@ import { ReferenceGate } from "../gate/reference.ts";
 import { corpus } from "../gate/corpus.ts";
 import type { ServeRule } from "../manifest/types.ts";
 import { celldForward, type ForwardFn, serveIngress } from "../serve/ingress.ts";
+import { fileGrantStore } from "../fs/grants.ts";
+import { grantsService } from "../fs/binding.ts";
 
 export interface RunningDaemon {
   path: string;
@@ -111,6 +113,21 @@ function withGate(backend: DaemonBackend, gate: GateSurface): DaemonBackend {
     gateRules: () => gate.rules,
     gateLog: (opts: GateLogOptions): GateLogEntry[] =>
       toGateLogEntries(gate.log.entries(opts.limit)),
+  };
+}
+
+/**
+ * Broker the host filesystem for objects behind the folder-grant allow-list (M10): serve grants.list
+ * and the scoped fs.read/fs.write pair from a file-backed grant store (~/.resagent/grants.json). A
+ * celld object can't touch the FS itself, so the daemon is the broker; every access is grant-checked.
+ */
+function withGrants(backend: DaemonBackend): DaemonBackend {
+  const svc = grantsService(fileGrantStore());
+  return {
+    ...backend,
+    grantsList: svc.grantsList,
+    fsRead: svc.fsRead,
+    fsWrite: svc.fsWrite,
   };
 }
 
@@ -207,6 +224,8 @@ if (import.meta.main) {
 
   // The gate rides above the engine: serve the compiled manifest's rules + verdict log over C5.
   backend = withGate(backend, await loadGate());
+  // Folder grants (M10): grants.list + the scoped fs.read/fs.write pair.
+  backend = withGrants(backend);
 
   const daemon = serveUnix(path, backend);
   console.info(`ResAgent daemon listening on ${path}`);

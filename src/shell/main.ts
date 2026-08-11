@@ -25,6 +25,8 @@ import type {
 import type {
   AutomationRunResult,
   DaemonStatus,
+  FolderGrantInfo,
+  FsWriteResult,
   GateLogEntry,
   GateRuleInfo,
   Json,
@@ -56,6 +58,11 @@ interface ShellApi {
   automationRun?(
     params: AutomationRunParams,
   ): Promise<AutomationRunResult> | AutomationRunResult;
+  // Folder grants (M10): grantsList is the Grants tab's read surface; the fs pair is protocol
+  // plumbing (no mutating UI this pass), optional to match DaemonBackend.
+  grantsList?(): Promise<FolderGrantInfo[]> | FolderGrantInfo[];
+  fsRead?(path: string): Promise<string> | string;
+  fsWrite?(path: string, data: string): Promise<FsWriteResult> | FsWriteResult;
 }
 
 const BOUND_METHODS = [
@@ -69,6 +76,9 @@ const BOUND_METHODS = [
   "gateRules",
   "gateLog",
   "automationRun",
+  "grantsList",
+  "fsRead",
+  "fsWrite",
 ] as const;
 
 // ── Desktop API shim (typed so `deno check` passes without the desktop lib) ──
@@ -122,6 +132,13 @@ const DEV_SEED: MemorySeed = {
       verdict: "deny",
       priority: -100,
       reason: "default deny for research/ResearchAgent",
+    },
+  ],
+  grants: [
+    {
+      path: "/Users/you/ResAgent/research",
+      mode: "read-write",
+      grantedAt: 1786200000000,
     },
   ],
 };

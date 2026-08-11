@@ -12,6 +12,8 @@ import { decode, encode, ProtocolError } from "./codec.ts";
 import type {
   AutomationRunResult,
   DaemonStatus,
+  FolderGrantInfo,
+  FsWriteResult,
   GateLogEntry,
   GateRuleInfo,
   Json,
@@ -67,6 +69,12 @@ export interface DaemonBackend {
   automationRun?(
     params: AutomationRunParams,
   ): Promise<AutomationRunResult> | AutomationRunResult;
+  /** The folder grants (M10). Optional — absent returns none, like gateRules. */
+  grantsList?(): Promise<FolderGrantInfo[]> | FolderGrantInfo[];
+  /** Read a file inside a granted folder (M10). Absent ⇒ an error frame. */
+  fsRead?(path: string): Promise<string> | string;
+  /** Write a file inside a read-write granted folder (M10). Absent ⇒ an error frame. */
+  fsWrite?(path: string, data: string): Promise<FsWriteResult> | FsWriteResult;
 }
 
 async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> {
@@ -105,6 +113,14 @@ async function dispatch(backend: DaemonBackend, req: Request): Promise<unknown> 
         throw new Error("automation.run is not supported by this backend");
       }
       return await backend.automationRun(req.params);
+    case "grants.list":
+      return backend.grantsList ? await backend.grantsList() : [];
+    case "fs.read":
+      if (!backend.fsRead) throw new Error("fs.read is not supported by this backend");
+      return await backend.fsRead(req.params.path);
+    case "fs.write":
+      if (!backend.fsWrite) throw new Error("fs.write is not supported by this backend");
+      return await backend.fsWrite(req.params.path, req.params.data);
   }
 }
 
