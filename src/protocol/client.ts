@@ -68,6 +68,7 @@ export class ProtocolClient {
     } catch {
       // The connection was torn down mid-read — expected on close; pending calls fail below.
     } finally {
+      this.#closed = true;
       this.#failAll(new Error("connection closed"));
     }
   }
