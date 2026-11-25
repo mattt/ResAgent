@@ -6,7 +6,7 @@
  * loop: the shell's client, the daemon's dispatch, and the wire codec all working together.
  */
 
-import { assert, assertEquals } from "jsr:@std/assert@^1";
+import { assert, assertEquals, assertRejects } from "jsr:@std/assert@^1";
 import { ProtocolClient } from "./client.ts";
 import { createDaemon } from "./server.ts";
 import { serveConn } from "./server.ts";
@@ -102,4 +102,18 @@ Deno.test("pending calls reject when the connection closes", async () => {
     threw = true;
   }
   assert(threw);
+});
+
+Deno.test("calls reject after the peer closes its response stream", async () => {
+  const responses = new TransformStream<Uint8Array, Uint8Array>();
+  const client = new ProtocolClient({
+    readable: responses.readable,
+    writable: new WritableStream<Uint8Array>(),
+  });
+  const pending = assertRejects(() => client.status(), Error, "connection closed");
+  await responses.writable.close();
+  await pending;
+
+  await assertRejects(() => client.status(), Error, "closed");
+  await client.close();
 });
